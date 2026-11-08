@@ -51,13 +51,17 @@ DEFAULTS = {
     },
     # 浮窗
     "avatar": {
-        "size": 132,
+        "size": 156,
+        "mode": "portrait",
+        "fullbodySize": 360,
         "expressionsPath": str(CONFIG_PATH.parent / "expressions"),
         "x": 48,
         "y": 240,
         "alwaysOnTop": True,
     },
     "bubbleHideAfterSec": 12,
+    "watchEnabled": True,
+    "chat": {"sessionId": "", "pending": None, "workspacePath": str(ROOT)},
 }
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -73,7 +77,8 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def load() -> dict:
     """读配置；文件不存在就用默认值（并顺手建目录）。"""
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    (CONFIG_PATH.parent / "expressions").mkdir(exist_ok=True)
+    for mode in ("portrait", "fullbody"):
+        (CONFIG_PATH.parent / "expressions" / mode).mkdir(parents=True, exist_ok=True)
     if not CONFIG_PATH.exists():
         config = _deep_merge(DEFAULTS, {})
         save(config)

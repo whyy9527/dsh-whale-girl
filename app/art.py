@@ -6,10 +6,20 @@ from pathlib import Path
 import hashlib
 
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
-from theme import SURFACE_RGBA, BORDER_RGBA
+from theme import SURFACE_RGBA, SURFACE_TOP, SURFACE_BOTTOM, BORDER_RGBA
 
 BASE = 512
 MOODS = ("idle", "smug", "shock", "happy", "bored", "angry")
+
+def surface(size):
+    image = Image.new("RGBA", size)
+    draw = ImageDraw.Draw(image)
+    for y in range(size[1]):
+        ratio = y / max(1, size[1] - 1)
+        rgba = tuple(round(a + (b - a) * ratio) for a, b in zip(SURFACE_TOP, SURFACE_BOTTOM))
+        draw.line((0, y, size[0], y), fill=rgba)
+    return image
+
 
 def _circle_mask(size: int) -> Image.Image:
     mask = Image.new("L", (size * 4, size * 4), 0)
@@ -57,7 +67,10 @@ def render_popout(image: Image.Image, mood: str) -> Image.Image:
     canvas = Image.new("RGBA", (size, size))
     circle = (size * .14, size * .27, size * .86, size * .99)
     draw = ImageDraw.Draw(canvas)
-    draw.ellipse(circle, fill=SURFACE_RGBA, outline=BORDER_RGBA, width=5)
+    mask = Image.new("L", canvas.size)
+    ImageDraw.Draw(mask).ellipse(circle, fill=255)
+    canvas.paste(surface(canvas.size), (0, 0), mask)
+    draw.ellipse(circle, outline=BORDER_RGBA, width=4)
     draw.arc(tuple(v + (8 if i < 2 else -8) for i, v in enumerate(circle)),
              195, 325, fill=(255, 255, 255, 180), width=3)
 
@@ -88,31 +101,51 @@ def render_popout(image: Image.Image, mood: str) -> Image.Image:
     return canvas.resize((BASE, BASE), Image.Resampling.LANCZOS)
 
 
-def expression_source(folder: Path | None, mood: str) -> Path | None:
-    """Resolve each mood independently: local PNG/WebP, then bundled artwork."""
-    for directory in ([folder] if folder else []) + [EXPRESSION_DIR]:
-        for suffix in (".png", ".webp"):
-            candidate = directory / (mood + suffix)
-            if candidate.is_file():
-                return candidate
-    return None
+def render_fullbody(path):
+    with Image.open(path) as source:
+        character = source.convert("RGBA")
+    character = character.crop(character.getchannel("A").getbbox())
+    size = (768, 1024)
+    scale = min(size[0] * .94 / character.width, size[1] * .92 / character.height)
+    character = character.resize((round(character.width * scale), round(character.height * scale)), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", size)
+    base = (size[0] * .12, size[1] * .88, size[0] * .88, size[1] * .99)
+    mask = Image.new("L", size)
+    ImageDraw.Draw(mask).ellipse(base, fill=255)
+    canvas.paste(surface(size), (0, 0), mask)
+    ImageDraw.Draw(canvas).ellipse(base, outline=BORDER_RGBA, width=3)
+    canvas.alpha_composite(character, ((size[0] - character.width) // 2, round(size[1] * .95 - character.height)))
+    return canvas
 
 
-def render_all(cache_dir: Path, expressions: Path | None = None) -> dict[str, Path]:
+def expression_source(folder: Path | None, mood: str, mode='portrait') -> Path | None:
+    """Mode-specific local art wins; full-body idle is an explicit reusable base pose."""
+    if mode not in ('portrait', 'fullbody'):
+        raise ValueError(f'Unknown display mode: {mode}')
+    if folder:
+        names = [mood] + (['idle'] if mode == 'fullbody' and mood != 'idle' else [])
+        for name in names:
+            for suffix in ('.png', '.webp'):
+                candidate = folder / mode / (name + suffix)
+                if candidate.is_file():
+                    return candidate
+    return EXPRESSION_DIR / (mood + '.webp')
+
+
+def render_all(cache_dir: Path, expressions: Path | None = None, mode='portrait') -> dict[str, Path]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     folder = Path(expressions).expanduser() if expressions else None
-    paths: dict[str, Path] = {}
+    paths = {}
     for mood in MOODS:
-        source = expression_source(folder, mood)
-        if source is None:
-            raise FileNotFoundError(f"Missing expression: {mood}.png or {mood}.webp")
+        source = expression_source(folder, mood, mode)
         stat = source.stat()
-        identity = f"popout-v5-shared-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        identity = f'glass-v1:{mode}:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}'
         stamp = hashlib.sha256(identity.encode()).hexdigest()[:20]
-        target = cache_dir / f"expr-{mood}-{stamp}.png"
+        target = cache_dir / f'expr-{mode}-{mood}-{stamp}.png'
         if not target.exists():
-            render_expression(source, mood).save(target)
-            for stale in cache_dir.glob(f"expr-{mood}-*.png"):
+            image = render_fullbody(source) if mode == 'fullbody' else render_expression(source, mood)
+            image.save(target)
+            for stale in cache_dir.glob(f'expr-{mode}-{mood}-*.png'):
                 if stale != target:
                     stale.unlink(missing_ok=True)
         paths[mood] = target

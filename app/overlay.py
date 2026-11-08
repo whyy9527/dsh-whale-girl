@@ -27,13 +27,13 @@ from AppKit import (
     NSMakePoint,
     NSMakeRect,
     NSMakeSize,
-    NSMenu,
     NSEvent,
-    NSMenuItem,
     NSMutableParagraphStyle,
     NSParagraphStyleAttributeName,
     NSShadow,
     NSStatusWindowLevel,
+    NSStatusBar,
+    NSVariableStatusItemLength,
     NSTextField,
     NSView,
     NSWindow,
@@ -45,10 +45,11 @@ from AppKit import (
 )
 from Foundation import NSString, NSTimer, NSObject
 from theme import SURFACE_RGBA, BORDER_RGBA
+from glass import paint_glass
+from controls import Controls
 
 BUBBLE_PADDING = 14
 BUBBLE_RADIUS = 16
-GAP = 8
 AVATAR_GAP = 18  # 气泡小尖角伸出来的距离
 MAX_BUBBLE_WIDTH = 300
 FONT_SIZE = 13.5
@@ -118,14 +119,9 @@ class BubbleView(NSView):
         shadow.setShadowOffset_(NSMakeSize(0, -3))
         shadow.set()
 
-        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(bounds, BUBBLE_RADIUS, BUBBLE_RADIUS)
-        _color(*BUBBLE_FILL).setFill()
-        path.fill()
+        paint_glass(bounds, BUBBLE_RADIUS)
 
         NSShadow.alloc().init().set()
-        _color(*(value / 255 for value in BORDER_RGBA)).setStroke()
-        path.setLineWidth_(1.0)
-        path.stroke()
 
         # 左边指向头像的小尖角
         tail = NSBezierPath.bezierPath()
@@ -207,6 +203,7 @@ class Overlay(NSObject):
         self._images = {mood: NSImage.alloc().initWithContentsOfFile_(str(path)) for mood, path in art_paths.items()}
         self._art_timer = None
         self._avatar_size = 132
+        self._avatar_height = 132
         self._visible = False
         self._hide_timer = None
         self._origin = (48, 240)
@@ -256,16 +253,22 @@ class Overlay(NSObject):
         self._drag = DragView.alloc().initWithOverlay_(self)
         container.addSubview_(self._drag)
 
+        self._controls = Controls.alloc().initWithCallback_(self._dispatch)
+        self._status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
+        self._status_item.button().setTitle_('鲸')
+        self._status_item.button().setTarget_(self)
+        self._status_item.button().setAction_(b'statusClicked:')
         self._set_mood('idle')
         return self
 
     # ---------- 对外 ----------
 
     @python_method
-    def _configure(self, *, size, x, y, bubble_hide, always_on_top):
-        self._avatar_size = int(size)
+    def _configure(self, *, size, x, y, bubble_hide, always_on_top, mode="portrait", fullbody_size=360):
+        self._avatar_size = round(fullbody_size * .75) if mode == "fullbody" else int(size)
+        self._avatar_height = int(fullbody_size) if mode == "fullbody" else int(size)
         self._bubble_hide_after = float(bubble_hide)
-        self._avatar.setFrame_(NSMakeRect(0, 0, self._avatar_size, self._avatar_size))
+        self._avatar.setFrame_(NSMakeRect(0, 0, self._avatar_size, self._avatar_height))
         self._window.setLevel_(NSStatusWindowLevel if always_on_top else 0)
         self._resize_to_avatar()
         self._window.setFrameOrigin_(NSMakePoint(int(x), int(y)))
@@ -335,7 +338,7 @@ class Overlay(NSObject):
         text_height = math.ceil(rect.size.height) + 2
         bubble_height = text_height + BUBBLE_PADDING * 2
         bubble_width = min(MAX_BUBBLE_WIDTH, math.ceil(rect.size.width) + BUBBLE_PADDING * 2 + 6)
-        total_height = max(self._avatar_size, bubble_height)
+        total_height = max(self._avatar_height, bubble_height)
         total_width = self._avatar_size + AVATAR_GAP + bubble_width
         return total_width, total_height, bubble_height
 
@@ -343,14 +346,14 @@ class Overlay(NSObject):
     def _apply_layout(self, total_width, total_height, bubble_height):
         frame = self._window.frame()
         anchor_y = frame.origin.y + self._avatar.frame().origin.y
-        avatar_y = (total_height - self._avatar_size) / 2.0
+        avatar_y = (total_height - self._avatar_height) / 2.0
         self._window.setFrame_display_(
             NSMakeRect(frame.origin.x, anchor_y - avatar_y, total_width, total_height), True
         )
         container = self._window.contentView()
         container.setFrame_(NSMakeRect(0, 0, total_width, total_height))
 
-        self._avatar.setFrame_(NSMakeRect(0, avatar_y, self._avatar_size, self._avatar_size))
+        self._avatar.setFrame_(NSMakeRect(0, avatar_y, self._avatar_size, self._avatar_height))
 
         bubble_width = total_width - self._avatar_size - AVATAR_GAP
         bubble_y = (total_height - bubble_height) / 2.0
@@ -364,10 +367,10 @@ class Overlay(NSObject):
         frame = self._window.frame()
         anchor_y = frame.origin.y + self._avatar.frame().origin.y
         size = self._avatar_size
-        self._window.setFrame_display_(NSMakeRect(frame.origin.x, anchor_y, size, size), True)
-        self._window.contentView().setFrame_(NSMakeRect(0, 0, size, size))
-        self._avatar.setFrame_(NSMakeRect(0, 0, size, size))
-        self._drag.setFrame_(NSMakeRect(0, 0, size, size))
+        self._window.setFrame_display_(NSMakeRect(frame.origin.x, anchor_y, size, self._avatar_height), True)
+        self._window.contentView().setFrame_(NSMakeRect(0, 0, size, self._avatar_height))
+        self._avatar.setFrame_(NSMakeRect(0, 0, size, self._avatar_height))
+        self._drag.setFrame_(NSMakeRect(0, 0, size, self._avatar_height))
         self._bubble.setHidden_(True)
 
     # ---------- 表情 / 定时 ----------
@@ -409,39 +412,23 @@ class Overlay(NSObject):
 
     @python_method
     def _popup_menu(self):
-        menu = NSMenu.alloc().init()
-        for title, action in (
-            ('现在看一眼', b'menuLook:'),
-            ('暂停 / 继续', b'menuPause:'),
-            ('打开表情文件夹', b'menuExpressions:'),
-            ('打开配置文件夹', b'menuConfig:'),
-            ('退出鲸鱼娘', b'menuQuit:'),
-        ):
-            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, '')
-            item.setTarget_(self)
-            menu.addItem_(item)
-        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-        menu.popUpMenuPositioningItem_atLocation_inView_(None, NSMakePoint(0, 0), self._window.contentView())
+        frame = self._window.frame()
+        avatar = self._avatar.frame()
+        anchor = NSMakeRect(frame.origin.x + avatar.origin.x, frame.origin.y + avatar.origin.y, avatar.size.width, avatar.size.height)
+        self._controls._toggle(anchor, self._window.screen())
 
-    def menuLook_(self, _sender):
+    @python_method
+    def _dispatch(self, action, value=None):
         if self._on_menu:
-            self._on_menu('look', None)
+            self._on_menu(action, value)
 
-    def menuPause_(self, _sender):
-        if self._on_menu:
-            self._on_menu('pause', None)
+    def statusClicked_(self, _sender):
+        self._popup_menu()
 
-    def menuExpressions_(self, _sender):
-        if self._on_menu:
-            self._on_menu('expressions', None)
-
-    def menuConfig_(self, _sender):
-        if self._on_menu:
-            self._on_menu('config', None)
-
-    def menuQuit_(self, _sender):
-        if self._on_menu:
-            self._on_menu('quit', None)
+    @python_method
+    def _close_controls(self):
+        self._controls._window.close()
+        NSStatusBar.systemStatusBar().removeStatusItem_(self._status_item)
 
 
 def activate_app():

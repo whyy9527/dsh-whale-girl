@@ -168,3 +168,12 @@ test('浮窗启动路径不存在时记录错误并保持 HTTP 服务在线', as
     for (const dispose of ctx.effects) dispose()
   }
 })
+
+
+test('browser origins cannot submit tool-enabled user text', async () => {
+  const response = await fetch(`${base}/chat`, {
+    method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' },
+    body: JSON.stringify({ text: 'write a file' }),
+  })
+  assert.equal(response.status, 403)
+})

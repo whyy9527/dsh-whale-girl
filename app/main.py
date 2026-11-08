@@ -36,6 +36,8 @@ from frames import FramePicker, KeptFrame, frame_to_jpeg, now_stamp, stitch_grid
 from overlay import Overlay, activate_app  # noqa: E402
 from lifecycle import InstanceLock
 from tts import Speaker  # noqa: E402
+from chat import Conversation
+import autostart
 
 from PyObjCTools import AppHelper  # noqa: E402
 from Foundation import NSTimer, NSObject  # noqa: E402
@@ -64,12 +66,11 @@ class Brain(threading.Thread):
         )
         self.stop_event = threading.Event()
         self.force_look = threading.Event()
-        self.paused = False
+        self.paused = not cfg.get("watchEnabled", True)
+        self.chat_active = False
         self.pause_generation = 0
         self.last_sent_at = 0.0
         self.permission_warned = False
-        self.sent_count = 0
-        self.capture_failures = 0
         self._seen_pause_generation = 0
 
     # ---------- 主循环 ----------
@@ -81,6 +82,9 @@ class Brain(threading.Thread):
                 if self._seen_pause_generation != self.pause_generation:
                     self.picker.reset()
                     self._seen_pause_generation = self.pause_generation
+                if self.chat_active:
+                    self.stop_event.wait(0.3)
+                    continue
                 if self.paused and not self.force_look.is_set():
                     time.sleep(0.3)
                     continue
@@ -187,7 +191,7 @@ class Brain(threading.Thread):
                 AppHelper.callAfter(self.overlay._show_comment, f"翻车了：{message[:60]}", "shock")
             return
 
-        if self.stop_event.is_set() or generation != self.pause_generation:
+        if self.stop_event.is_set() or self.chat_active or generation != self.pause_generation:
             return
         say = str(data.get("say", "")).strip()
         mood = str(data.get("mood", "idle"))
@@ -195,11 +199,10 @@ class Brain(threading.Thread):
         AppHelper.callAfter(self._deliver_comment, say, mood, generation)
 
     def _deliver_comment(self, say, mood, generation):
-        if self.stop_event.is_set() or generation != self.pause_generation:
+        if self.stop_event.is_set() or self.chat_active or generation != self.pause_generation:
             return
         self.overlay._show_comment(say, mood)
         self.speaker.speak_async(say)
-        self.sent_count += 1
 
     # ---------- 其它 ----------
 
@@ -241,7 +244,7 @@ def build_overlay(cfg: dict) -> Overlay:
     import art
 
     expressions = cfg.get("avatar", {}).get("expressionsPath")
-    art_paths = art.render_all(config_module.CACHE_DIR, expressions=expressions)
+    art_paths = art.render_all(config_module.CACHE_DIR, expressions=expressions, mode=cfg.get("avatar", {}).get("mode", "portrait"))
     overlay = Overlay.alloc().initWithArt_({mood: str(path) for mood, path in art_paths.items()})
     avatar = cfg.get("avatar", {})
     overlay._configure(
@@ -250,12 +253,14 @@ def build_overlay(cfg: dict) -> Overlay:
         y=avatar.get("y", 240),
         bubble_hide=cfg.get("bubbleHideAfterSec", 12),
         always_on_top=avatar.get("alwaysOnTop", True),
+        mode=avatar.get("mode", "portrait"),
+        fullbody_size=avatar.get("fullbodySize", 360),
     )
     def refresh_art(_timer):
         if overlay._drag._drag_start is not None:
             return
         try:
-            overlay._reload_art(art.render_all(config_module.CACHE_DIR, expressions=expressions))
+            overlay._reload_art(art.render_all(config_module.CACHE_DIR, expressions=expressions, mode=avatar.get("mode", "portrait")))
         except OSError as error:
             print(f"[avatar] {error}", flush=True)
     overlay._art_timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1.0, True, refresh_art)
@@ -271,7 +276,7 @@ def run_check(cfg: dict) -> int:
     print("endpoint:", cfg.get("endpoint"))
 
     print("\n== 素材 ==")
-    paths = art.render_all(config_module.CACHE_DIR, expressions=cfg.get("avatar", {}).get("expressionsPath"))
+    paths = art.render_all(config_module.CACHE_DIR, expressions=cfg.get("avatar", {}).get("expressionsPath"), mode=cfg.get("avatar", {}).get("mode", "portrait"))
     print(", ".join(f"{mood}={path.name}" for mood, path in paths.items()))
 
     print("\n== 插件 ==")
@@ -359,6 +364,7 @@ def main() -> int:
     # Cocoa may idle in C indefinitely; a Python callback lets SIGTERM run.
     signal_timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(0.25, True, lambda _: None)
     brain = None
+    conversation = None
     cleaned = False
 
     def cleanup():
@@ -371,6 +377,9 @@ def main() -> int:
         signal_timer.invalidate()
         if overlay._art_timer is not None:
             overlay._art_timer.invalidate()
+        if conversation is not None:
+            conversation.stop()
+        overlay._close_controls()
         speaker.shutdown()
         instance.close()
         print("[lifecycle] stopped: audio worker reaped, instance lock released", flush=True)
@@ -388,25 +397,108 @@ def main() -> int:
 
     brain = Brain(cfg, overlay, speaker, demo=args.demo, once=args.once)
 
+    def update_controls():
+        overlay._controls._configure(watch=not brain.paused, voice=speaker.enabled,
+            mode=cfg['avatar']['mode'], autostart=autostart.enabled())
+
+    def chat_event(kind, data):
+        if cleaned:
+            return
+        if kind == 'accepted':
+            cfg['chat']['sessionId'] = data['sessionId']
+            cfg['chat']['pending'] = {key: data[key] for key in ('sessionId', 'requestId')}
+            config_module.save(cfg)
+        elif kind == 'state':
+            status = data['status']
+            labels = {'queued': '消息已排队', 'running': 'DSH 正在处理…',
+                'approval': '需要确认，请打开 DSH 工作台。', 'complete': '已回复', 'failed': '任务未完成'}
+            overlay._controls._set_busy(status not in ('complete', 'failed'), labels[status])
+            if status in ('complete', 'failed'):
+                text = data.get('text') or data.get('error') or '任务已结束。'
+                overlay._controls._append('DSH', text)
+                overlay._show_comment(text[:180], 'idle')
+                speaker.speak_async(text)
+                cfg['chat']['pending'] = None
+                config_module.save(cfg)
+                brain.chat_active = False
+                brain.pause_generation += 1
+        elif kind == 'connection':
+            overlay._controls._set_busy(True, data['error'])
+        elif kind == 'error':
+            overlay._controls._append('连接', data['error'])
+            overlay._controls._set_busy(False, '连接失败；可在 DSH 工作台确认任务。')
+            brain.chat_active = False
+
+    conversation = Conversation(cfg['endpoint'], lambda kind, data: AppHelper.callAfter(chat_event, kind, data))
+
+    def open_workbench():
+        def resolve():
+            import requests
+            try:
+                response = requests.post(cfg['endpoint'].rstrip('/') + '/workbench', json={}, timeout=10)
+                result = response.json()
+                if not result.get('ok'):
+                    raise RuntimeError(result.get('error', '无法打开 DSH 工作台'))
+            except Exception as error:
+                AppHelper.callAfter(overlay._controls._status.setStringValue_, str(error))
+        threading.Thread(target=resolve, daemon=True).start()
+
     def on_menu(action, value):
-        if action == "look":
+        if action == 'look':
             brain.request_look()
-        elif action == "pause":
-            paused = brain.toggle_pause()
-            overlay._show_comment("那我先闭会儿眼。" if paused else "继续盯着你。", "bored" if paused else "happy")
-        elif action == "expressions":
-            folder = Path(cfg["avatar"]["expressionsPath"]).expanduser()
+        elif action == 'send':
+            if conversation.send(value, cfg['chat']['sessionId'], cfg['chat']['workspacePath']):
+                brain.chat_active = True
+                brain.pause_generation += 1
+                speaker.stop()
+                overlay._controls._append('你', value)
+                overlay._controls._set_busy(True, '正在交给 DSH…')
+        elif action == 'watch':
+            if bool(value) == brain.paused:
+                brain.toggle_pause()
+            cfg['watchEnabled'] = not brain.paused
+            config_module.save(cfg)
+        elif action == 'voice':
+            cfg['tts']['enabled'] = bool(value)
+            speaker.stop()
+            config_module.save(cfg)
+        elif action == 'mode':
+            import art
+            avatar = cfg['avatar']
+            frame = overlay._window.frame()
+            avatar['x'] = int(frame.origin.x)
+            avatar['y'] = int(frame.origin.y + overlay._avatar.frame().origin.y)
+            avatar['mode'] = value
+            overlay._reload_art(art.render_all(config_module.CACHE_DIR, expressions=avatar['expressionsPath'], mode=value))
+            overlay._configure(size=avatar['size'], x=avatar['x'], y=avatar['y'],
+                bubble_hide=cfg['bubbleHideAfterSec'], always_on_top=avatar['alwaysOnTop'],
+                mode=value, fullbody_size=avatar['fullbodySize'])
+            overlay._visible = False
+            config_module.save(cfg)
+        elif action == 'autostart':
+            try:
+                autostart.configure(value)
+            except Exception as error:
+                overlay._controls._status.setStringValue_(str(error))
+        elif action == 'expressions':
+            folder = Path(cfg['avatar']['expressionsPath']).expanduser() / cfg['avatar']['mode']
             folder.mkdir(parents=True, exist_ok=True)
-            subprocess.run(["open", str(folder)], check=False)
-        elif action == "config":
-            subprocess.run(["open", str(config_module.CONFIG_PATH.parent)], check=False)
-        elif action == "quit":
+            subprocess.run(['open', str(folder)], check=False)
+        elif action == 'workbench':
+            open_workbench()
+        elif action == 'quit':
             brain.stop()
             AppHelper.stopEventLoop()
-        elif action == "moved" and value:
-            avatar = cfg.setdefault("avatar", {})
-            avatar["x"], avatar["y"] = value
+        elif action == 'moved' and value:
+            cfg['avatar']['x'], cfg['avatar']['y'] = value
             config_module.save(cfg)
+        update_controls()
+
+    update_controls()
+    if cfg['chat']['pending']:
+        brain.chat_active = True
+        conversation.resume(cfg['chat']['pending'])
+        overlay._controls._set_busy(True, '恢复 DSH 任务状态…')
 
     overlay._set_callback(on_menu)
     if args.once:

@@ -17,13 +17,6 @@ dsh plugin --profile "$PROFILE" add "$ROOT"
 
 cat <<'EOF'
 
-装完了。接下来：
-  1. 重启 DSH：  dsh web
-  2. 确认插件活着：curl -s http://127.0.0.1:8791/health
-      期望：{"ok":true,"plugin":"dsh-whale-girl",...}
-  3. 跑浮窗：    ./scripts/run.sh --check   （先自检）
-                 ./scripts/run.sh           （正式跑）
-
-端口/模型想改：改 ~/.dsh/profiles/<profile>/cordis.patch.yml 里 whale-girl 的 config，
-或者改本仓库 cordis.patch.yml 后重装。改完都要重启 dsh web。
+插件安装完成。重启 dsh web 后浮窗自动出现。
+登录时启动可在桌宠菜单中开启。
 EOF

@@ -1,7 +1,7 @@
 {
   "name": "dsh-whale-girl",
   "version": "0.1.0",
-  "description": "DeepSeek 的看屏幕小人：定时截图 → 差分挑帧 → 九宫格 → DeepSeek 说话 → Qwen3-TTS 本地声线念出来，圆形头像浮在所有窗口上",
+  "description": "macOS 鲸鱼娘桌宠：看屏、文字输入、DSH 工具会话、头像与全身、本地 Qwen 语音",
   "type": "module",
   "main": "lib/host.js",
   "exports": {
@@ -35,7 +35,10 @@
     ".node-version",
     "README.md",
     "LICENSE",
-    "THIRD-PARTY-NOTICES.md"
+    "THIRD-PARTY-NOTICES.md",
+    "AGENTS.md",
+    "docs",
+    "design"
   ],
   "repository": {
     "type": "git",

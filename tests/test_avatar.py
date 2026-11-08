@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
-from PIL import Image
+from PIL import Image, ImageDraw
 import art
 import overlay as ui
 from AppKit import NSMakePoint
@@ -17,10 +17,10 @@ class AvatarTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             local = root / 'expressions'
-            local.mkdir()
-            webp = local / 'happy.webp'
+            (local / 'portrait').mkdir(parents=True)
+            webp = local / 'portrait/happy.webp'
             Image.new('RGBA', (40, 40), (0, 0, 255, 255)).save(webp)
-            source = local / 'happy.png'
+            source = local / 'portrait/happy.png'
             Image.new('RGBA', (40, 40), (255, 0, 0, 255)).save(source)
             first = art.render_all(root / 'cache', expressions=local)
             self.assertEqual(art.expression_source(local, 'happy'), source)
@@ -42,6 +42,26 @@ class AvatarTests(unittest.TestCase):
         self.assertGreater(image.getchannel('A').crop((180, 0, 330, 130)).getextrema()[1], 0)
         self.assertEqual(image.getpixel((0, 0))[3], 0)
         self.assertEqual(image.size, (512, 512))
+
+    def test_fullbody_uses_its_own_pose_and_preserves_shoes_and_tail(self):
+        with tempfile.TemporaryDirectory() as folder:
+            local = Path(folder)
+            (local / 'portrait').mkdir()
+            (local / 'fullbody').mkdir()
+            Image.new('RGBA', (40, 40), 'red').save(local / 'portrait/idle.png')
+            source = Image.new('RGBA', (100, 300))
+            draw = ImageDraw.Draw(source)
+            draw.rectangle((40, 10, 70, 270), fill='green')
+            draw.rectangle((35, 270, 80, 290), fill='blue')
+            draw.rectangle((70, 100, 98, 160), fill='orange')
+            source.save(local / 'fullbody/idle.png')
+            selected = art.expression_source(local, 'happy', 'fullbody')
+            self.assertEqual(selected, local / 'fullbody/idle.png')
+            image = art.render_fullbody(selected)
+            colors = set(image.get_flattened_data())
+            self.assertIn((0, 0, 255, 255), colors)
+            self.assertIn((255, 165, 0, 255), colors)
+            self.assertNotIn((255, 0, 0, 255), colors)
 
 
 class CocoaDragTests(unittest.TestCase):
@@ -79,6 +99,7 @@ class CocoaDragTests(unittest.TestCase):
         finally:
             if pet._hide_timer:
                 pet._hide_timer.invalidate()
+            pet._close_controls()
             pet._window.close()
 
     def test_live_timer_loads_and_removes_local_override(self):
@@ -86,17 +107,19 @@ class CocoaDragTests(unittest.TestCase):
         from main import build_overlay
         with tempfile.TemporaryDirectory() as folder:
             local = Path(folder)
+            (local / 'portrait').mkdir()
             pet = build_overlay({'avatar': {'size': 132, 'expressionsPath': str(local)}})
             try:
                 original = str(pet._art['idle'])
-                Image.new('RGBA', (32, 32), (200, 30, 50, 255)).save(local / 'idle.png')
+                Image.new('RGBA', (32, 32), (200, 30, 50, 255)).save(local / 'portrait/idle.png')
                 NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(1.3))
                 self.assertNotEqual(str(pet._art['idle']), original)
-                (local / 'idle.png').unlink()
+                (local / 'portrait/idle.png').unlink()
                 NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(1.3))
                 self.assertEqual(str(pet._art['idle']), original)
             finally:
                 pet._art_timer.invalidate()
+                pet._close_controls()
                 pet._window.close()
 
 
