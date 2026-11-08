@@ -51,6 +51,8 @@ GAP = 8
 AVATAR_GAP = 18  # 气泡小尖角伸出来的距离
 MAX_BUBBLE_WIDTH = 300
 FONT_SIZE = 13.5
+BUBBLE_FILL = (0.99, 0.975, 0.945, 0.97)
+BUBBLE_TEXT = (0.14, 0.21, 0.31, 1.0)
 
 
 def _color(r: float, g: float, b: float, a: float = 1.0) -> NSColor:
@@ -85,7 +87,7 @@ class BubbleView(NSView):
         self._label.setDrawsBackground_(False)
         self._label.setEditable_(False)
         self._label.setSelectable_(False)
-        self._label.setTextColor_(NSColor.whiteColor())
+        self._label.setTextColor_(_color(*BUBBLE_TEXT))
         self._label.setFont_(NSFont.systemFontOfSize_(FONT_SIZE))
         cell = self._label.cell()
         cell.setWraps_(True)
@@ -97,7 +99,7 @@ class BubbleView(NSView):
         self._text = text or ''
         attributes = {
             NSFontAttributeName: NSFont.systemFontOfSize_(FONT_SIZE),
-            NSForegroundColorAttributeName: NSColor.whiteColor(),
+            NSForegroundColorAttributeName: _color(*BUBBLE_TEXT),
             NSParagraphStyleAttributeName: _paragraph_style(),
         }
         attributed = NSAttributedString.alloc().initWithString_attributes_(self._text, attributes)
@@ -110,17 +112,17 @@ class BubbleView(NSView):
         bounds = self.bounds()
 
         shadow = NSShadow.alloc().init()
-        shadow.setShadowColor_(_color(0, 0, 0, 0.5))
+        shadow.setShadowColor_(_color(0.10, 0.18, 0.25, 0.18))
         shadow.setShadowBlurRadius_(16.0)
         shadow.setShadowOffset_(NSMakeSize(0, -3))
         shadow.set()
 
         path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(bounds, BUBBLE_RADIUS, BUBBLE_RADIUS)
-        _color(0.03, 0.08, 0.13, 0.88).setFill()
+        _color(*BUBBLE_FILL).setFill()
         path.fill()
 
         NSShadow.alloc().init().set()
-        _color(0.38, 0.84, 0.94, 0.55).setStroke()
+        _color(0.48, 0.63, 0.72, 0.7).setStroke()
         path.setLineWidth_(1.0)
         path.stroke()
 
@@ -130,7 +132,7 @@ class BubbleView(NSView):
         tail.lineToPoint_(NSMakePoint(-AVATAR_GAP, bounds.size.height / 2))
         tail.lineToPoint_(NSMakePoint(0.5, bounds.size.height / 2 - 8))
         tail.closePath()
-        _color(0.03, 0.08, 0.13, 0.88).setFill()
+        _color(*BUBBLE_FILL).setFill()
         tail.fill()
 
     @python_method

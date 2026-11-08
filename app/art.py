@@ -35,7 +35,7 @@ def _mask_ring(image: Image.Image, mood: str) -> Image.Image:
     square = _center_square(image).resize((canvas_size, canvas_size), Image.LANCZOS).convert("RGBA")
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     mask = _circle_mask(canvas_size)
-    canvas.paste(Image.new("RGBA", (canvas_size, canvas_size), (8, 26, 42, 255)), (0, 0), mask)
+    canvas.paste(Image.new("RGBA", (canvas_size, canvas_size), (218, 235, 246, 255)), (0, 0), mask)
     canvas.alpha_composite(square)
     canvas.putalpha(mask)
 
@@ -68,9 +68,9 @@ def render_popout(image: Image.Image, mood: str) -> Image.Image:
     color = RING.get(mood, RING["idle"])
     circle = (size * .14, size * .27, size * .86, size * .99)
     draw = ImageDraw.Draw(canvas)
-    draw.ellipse(circle, fill=(8, 28, 46, 245), outline=color + (220,), width=5)
+    draw.ellipse(circle, fill=(218, 235, 246, 250), outline=color + (220,), width=5)
     draw.arc(tuple(v + (8 if i < 2 else -8) for i, v in enumerate(circle)),
-             195, 325, fill=(210, 246, 255, 95), width=3)
+             195, 325, fill=(255, 255, 255, 180), width=3)
 
     character = image.crop(image.getchannel("A").getbbox())
     scale = min(size * .88 / character.width, size * .92 / character.height)
@@ -105,7 +105,7 @@ def render_all(cache_dir: Path, expressions: Path | None = None) -> dict[str, Pa
         if source is None:
             raise FileNotFoundError(f"Missing expression: {mood}.png or {mood}.webp")
         stat = source.stat()
-        identity = f"popout-v2:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        identity = f"popout-v3-pale-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
         stamp = hashlib.sha256(identity.encode()).hexdigest()[:20]
         target = cache_dir / f"expr-{mood}-{stamp}.png"
         if not target.exists():
