@@ -5,7 +5,7 @@ frame:SetSize(W.columns * W.cell, W.rows * W.cell)
 frame:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 0, 0)
 frame:SetFrameStrata('TOOLTIP')
 frame:EnableMouse(false)
-local textures, sequence, enabled = {}, 0, false
+local textures, sequence, enabled = {}, 0, true
 for i = 1, W.columns * W.rows do
     local texture = frame:CreateTexture(nil, 'OVERLAY')
     texture:SetSize(W.cell, W.cell)

@@ -20,7 +20,7 @@ def main():
         shutil.copy2(source / name, target / name)
     print('Installed:', target)
     print('已更新，在游戏里输入 /reload 应用。' if updating else '首次新增插件后请完全退出并重开游戏，在插件列表启用 Whale Bridge。')
-    print('默认不显示彩条。旧版运行中的彩条可输入 /whale off 立即关闭。')
+    print('默认开启顶部细彩条传输；当前游戏可输入 /whale on 立即开启，/whale off 关闭。')
 
 
 if __name__ == '__main__':

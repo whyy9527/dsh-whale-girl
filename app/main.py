@@ -448,6 +448,9 @@ def main() -> int:
                 if status == 'failed':
                     overlay._controls._append('连接', data.get('error') or '任务未完成')
                 elif active_kind == 'look':
+                    request_id = (cfg['chat'].get('pending') or {}).get('requestId', '')
+                    brain.log(f"[look] {request_id}: " +
+                              (data['suppressed'] if data.get('suppressed') else 'reply' if text else 'model-silent'))
                     if text and screen_generation == brain.pause_generation and (not brain.paused or active_manual):
                         overlay._controls._append('看屏', text)
                         brain._deliver_comment(text, data.get('mood', 'idle'), screen_generation, active_manual)

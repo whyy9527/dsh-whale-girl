@@ -86,7 +86,8 @@ class Conversation:
                         same = same_task(payload.get('game') if payload else None, current)
                         if payload and not payload.get('game') and payload.get('gameView'):
                             same = bool(game_view())
-                        if not same:
+                        if not same and state.get('text'):
+                            state['suppressed'] = 'game-context-changed'
                             state['text'] = ''
                     terminal = ('state', state)
                     return

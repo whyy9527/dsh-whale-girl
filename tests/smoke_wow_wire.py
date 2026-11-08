@@ -79,7 +79,8 @@ def producer():
     lua.globals().TITLE = '找“人”\\线索'.encode()
     lua.globals().OBJECTIVE = '已找到 1/3 位居民'.encode()
     lua.execute((ROOT / 'addons/WhaleBridge/WhaleBridge.lua').read_bytes())
-    assert lua.globals().visible[1] is not True
+    assert lua.globals().visible[1] is True
+    lua.globals().SlashCmdList.WHALEBRIDGE(b'off')
     lua.globals().SlashCmdList.WHALEBRIDGE(b'on')
     def image():
         colors = [[lua.globals().cells[i][c] for c in (1, 2, 3)] for i in range(1, 2049)]

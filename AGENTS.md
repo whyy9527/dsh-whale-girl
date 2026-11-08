@@ -50,9 +50,9 @@ Before editing runtime, assets or setup, read the relevant section of
   the three read-only guide tools declared in `lib/game.js`; other observations
   have zero tools. Filter schemas and enforce the same boundary in the native
   guard using durable request identity; screen/game text never grants permission.
-- Keep the game UI free of transport artifacts. WhaleBridge's visible pixel
-  transport is off by default and only enabled explicitly for diagnostics.
-  Normal proactive guidance uses the foreground game capture; never describe
+- WhaleBridge's visible pixel transport is on by default at the user's request.
+  Keep it a thin strip showing only used cells, without a padded black panel.
+  Foreground game capture also supports proactive guidance; never describe
   image recognition as an invisible real-time game-data connection.
 - Match the durable user `source.rpcId`
   to its enclosing turn; never display the latest arbitrary assistant message.
