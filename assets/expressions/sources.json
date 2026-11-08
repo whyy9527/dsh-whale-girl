@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/keleus/deepseek-pet",
+  "revision": "b9b61a35c3b2443ecdeab0ed442d6b33c603d343",
+  "files": {
+    "idle": "deepseek-idle.webp",
+    "smug": "reaction-proud.webp",
+    "shock": "reaction-shocked.webp",
+    "happy": "reaction-cheerful.webp",
+    "bored": "reaction-sleepy.webp",
+    "angry": "reaction-angry.webp"
+  }
+}

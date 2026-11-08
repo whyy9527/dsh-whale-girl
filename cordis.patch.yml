@@ -1,0 +1,22 @@
+# 鲸鱼娘看屏 —— 插件半边
+#
+# 桌面浮窗（app/）负责截图、差分、拼九宫格、Qwen TTS、画头像；
+# 这个插件只负责一件事：在本机开一个口子，把九宫格发给 DeepSeek，把那一句吐槽递回去。
+#
+# 改端口 / 换模型：改下面 config 里的值，重启 DSH 生效。
+- insert:
+    - id: whale-girl
+      name: 'dsh-whale-girl'
+      config:
+        enabled: true
+        host: 127.0.0.1
+        port: 8791
+        provider: deepseek-official
+        model: deepseek-flash
+        maxChars: 42
+        maxTokens: 1200
+        temperature: 1.1
+        timeoutMs: 45000
+        reasoningEffort: 'off'
+        # dsh web 起来时顺手把桌面浮窗也拉起来（已经在跑就不重复拉）
+        autostartOverlay: true
