@@ -6,19 +6,10 @@ from pathlib import Path
 import hashlib
 
 from PIL import Image, ImageDraw, ImageFilter
+from theme import SURFACE_RGBA, BORDER_RGBA
 
 BASE = 512
 MOODS = ("idle", "smug", "shock", "happy", "bored", "angry")
-
-# 情绪 → 外圈颜色（角色不出戏，只换光环）
-RING = {
-    "idle": (150, 225, 240),
-    "smug": (255, 205, 120),
-    "shock": (255, 130, 150),
-    "happy": (140, 235, 170),
-    "bored": (150, 160, 175),
-    "angry": (255, 105, 105),
-}
 
 def _circle_mask(size: int) -> Image.Image:
     mask = Image.new("L", (size * 4, size * 4), 0)
@@ -35,14 +26,13 @@ def _mask_ring(image: Image.Image, mood: str) -> Image.Image:
     square = _center_square(image).resize((canvas_size, canvas_size), Image.LANCZOS).convert("RGBA")
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     mask = _circle_mask(canvas_size)
-    canvas.paste(Image.new("RGBA", (canvas_size, canvas_size), (218, 235, 246, 255)), (0, 0), mask)
+    canvas.paste(Image.new("RGBA", (canvas_size, canvas_size), SURFACE_RGBA), (0, 0), mask)
     canvas.alpha_composite(square)
     canvas.putalpha(mask)
 
     ring = ImageDraw.Draw(canvas)
-    color = RING.get(mood, RING["idle"])
     width = max(2, canvas_size // 128)
-    ring.ellipse([width, width, canvas_size - width - 1, canvas_size - width - 1], outline=color + (235,), width=width)
+    ring.ellipse([width, width, canvas_size - width - 1, canvas_size - width - 1], outline=BORDER_RGBA, width=width)
     return canvas.resize((BASE, BASE), Image.LANCZOS)
 
 
@@ -65,10 +55,9 @@ def render_popout(image: Image.Image, mood: str) -> Image.Image:
     """Transparent character in front of a recessed circle, without clipping hair/tail."""
     size = BASE * 2
     canvas = Image.new("RGBA", (size, size))
-    color = RING.get(mood, RING["idle"])
     circle = (size * .14, size * .27, size * .86, size * .99)
     draw = ImageDraw.Draw(canvas)
-    draw.ellipse(circle, fill=(218, 235, 246, 250), outline=color + (220,), width=5)
+    draw.ellipse(circle, fill=SURFACE_RGBA, outline=BORDER_RGBA, width=5)
     draw.arc(tuple(v + (8 if i < 2 else -8) for i, v in enumerate(circle)),
              195, 325, fill=(255, 255, 255, 180), width=3)
 
@@ -105,7 +94,7 @@ def render_all(cache_dir: Path, expressions: Path | None = None) -> dict[str, Pa
         if source is None:
             raise FileNotFoundError(f"Missing expression: {mood}.png or {mood}.webp")
         stat = source.stat()
-        identity = f"popout-v3-pale-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        identity = f"popout-v4-shared-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
         stamp = hashlib.sha256(identity.encode()).hexdigest()[:20]
         target = cache_dir / f"expr-{mood}-{stamp}.png"
         if not target.exists():

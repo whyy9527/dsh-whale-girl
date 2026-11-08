@@ -44,6 +44,7 @@ from AppKit import (
     NSStringDrawingUsesLineFragmentOrigin,
 )
 from Foundation import NSString, NSTimer, NSObject
+from theme import SURFACE_RGBA, BORDER_RGBA
 
 BUBBLE_PADDING = 14
 BUBBLE_RADIUS = 16
@@ -51,7 +52,7 @@ GAP = 8
 AVATAR_GAP = 18  # 气泡小尖角伸出来的距离
 MAX_BUBBLE_WIDTH = 300
 FONT_SIZE = 13.5
-BUBBLE_FILL = (0.99, 0.975, 0.945, 0.97)
+BUBBLE_FILL = tuple(value / 255 for value in SURFACE_RGBA)
 BUBBLE_TEXT = (0.14, 0.21, 0.31, 1.0)
 
 
@@ -122,7 +123,7 @@ class BubbleView(NSView):
         path.fill()
 
         NSShadow.alloc().init().set()
-        _color(0.48, 0.63, 0.72, 0.7).setStroke()
+        _color(*(value / 255 for value in BORDER_RGBA)).setStroke()
         path.setLineWidth_(1.0)
         path.stroke()
 
