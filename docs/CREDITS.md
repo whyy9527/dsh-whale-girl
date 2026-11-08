@@ -18,3 +18,10 @@
 
 可选游戏资料查询接入 [无限图鉴](https://wuxianwow.com/ai) 的 MCP 服务，
 用于《魔兽世界：无限》的任务、NPC 与地图查询；数据来源与临时标记随结果保留。
+
+游戏桥的实现路径实际参考了 [Tensor-wow](https://github.com/robeson1010/Tensor-wow)
+的 Forever 像素输出/macOS 回读设计，以及
+[forever-addon-kit](https://github.com/Thunderz96/forever-addon-kit) 的客户端限制记录；
+接口核对使用 [Forever 客户端 API 源码镜像](https://github.com/Gethe/wow-ui-source/tree/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated)。
+WhaleBridge、线路编码和解码均为本项目独立实现，未复制上述项目代码，详情见
+[游戏数据桥](WOW.md)。

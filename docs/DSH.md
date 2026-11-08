@@ -83,3 +83,10 @@ temporary third-party coordinates from client data; do not invent missing locati
 Ask the player's current zone when directions depend on it. `report_issue` sends a
 public report and requires an explicit user request. Automatic observations may
 remember prior query results in the shared session but cannot call tools themselves.
+
+WhaleBridge may attach a fresh, bounded, explicitly untrusted public game snapshot
+to either request as an additional native text part. It does not grant tool
+authority or change observation provenance. The UI history projects only the
+user's first text part; DSH retains the complete envelope. See [game bridge](WOW.md)
+for ownership, freshness and client installation. This sensor has no independent
+conversation memory or direct model/tool execution path.

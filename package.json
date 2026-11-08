@@ -28,6 +28,7 @@
     "scripts/*.sh",
     "scripts/*.py",
     "assets",
+    "addons",
     "cordis.patch.yml",
     "pyproject.toml",
     "uv.lock",

@@ -10,6 +10,8 @@ copies of configuration defaults.
 - `lib/host.js`: DSH plugin, HTTP bridge and automatic overlay launch.
 - `lib/core.js`: screen-comment prompts and image payload contract.
 - `lib/chat.js`: shared DSH text/image session, request projection and automatic-turn tool policy.
+- `addons/WhaleBridge/`, `app/game.py`, `lib/game.js`: public non-combat game data,
+  calibrated pixel decoding and bounded observation envelopes; see [game bridge](docs/WOW.md).
 - `app/`: native Cocoa UI, screen sampling and local Qwen speech.
 - `app/config.py`: sole owner of settings defaults. User settings live under
   `$DSH_HOME/whale-girl/`, normally `~/.dsh/whale-girl/`.
@@ -38,6 +40,8 @@ Before editing runtime, assets or setup, read the relevant section of
   restore a full-screen fallback that sees the companion itself.
 - Keep comments gentle, brief and lightly playful. No sarcasm about the user’s
   effort, ability or idle time; silence is a valid model result.
+  Use the shared task context to contribute a clue or natural response; do not
+  narrate window changes or the nine-frame sequence. Never invent game routes.
 - Text, game queries and screen observations MUST use one persisted DSH session.
   DSH owns shared history and compaction; never add a parallel memory store or
   stateless `ctx.llm` screen path. Automatic observation turns hide tool schemas

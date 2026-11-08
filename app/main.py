@@ -37,6 +37,7 @@ from overlay import Overlay, activate_app  # noqa: E402
 from lifecycle import InstanceLock
 from tts import Speaker  # noqa: E402
 from chat import Conversation
+import game
 import autostart
 
 from PyObjCTools import AppHelper  # noqa: E402
@@ -73,6 +74,7 @@ class Brain(threading.Thread):
         self.last_sent_at = 0.0
         self.permission_warned = False
         self._seen_pause_generation = 0
+        self._game_signature = None
 
     # ---------- 主循环 ----------
 
@@ -82,6 +84,7 @@ class Brain(threading.Thread):
             try:
                 if self._seen_pause_generation != self.pause_generation:
                     self.picker.reset()
+                    self._game_signature = None
                     self._seen_pause_generation = self.pause_generation
                 if self.request_active:
                     self.stop_event.wait(0.3)
@@ -116,6 +119,17 @@ class Brain(threading.Thread):
 
     def _next_batch(self):
         image = grab() if not self.demo else self._demo_frame()
+        state = game.decode(image)
+        if state and not state.get('inCombat') and not state.get('error'):
+            selected = state.get('selectedQuest') or {}
+            signature = (state.get('mapId'), selected.get('id'),
+                         tuple(sorted((q['id'], q.get('complete', False)) for q in state.get('quests', []))))
+            previous, self._game_signature = self._game_signature, signature
+            if previous is not None and previous != signature:
+                self.picker.reset()
+                return [KeptFrame(image=image, taken_at=time.monotonic(), stamp=now_stamp())]
+        elif not state or state.get('error'):
+            self._game_signature = None
         return self.picker.offer(image)
 
     def _demo_frame(self):
@@ -153,7 +167,8 @@ class Brain(threading.Thread):
         span = 0.0
         if len(batch) >= 2:
             span = batch[-1].taken_at - batch[0].taken_at
-        return {"frames": frames, "spanSec": span, "grid": use_grid, "cellCount": len(batch)}
+        return {"frames": frames, "spanSec": span, "grid": use_grid, "cellCount": len(batch),
+                "game": game.decode(batch[-1].image)}
 
     def _send(self, batch, force: bool = False) -> None:
         if not force and time.monotonic() - self.last_sent_at < float(self.cfg.get("minSendIntervalSec", 20)):
@@ -432,7 +447,7 @@ def main() -> int:
             if brain.once:
                 brain.attempt_done.set()
 
-    conversation = Conversation(cfg['endpoint'], lambda kind, data: AppHelper.callAfter(chat_event, kind, data))
+    conversation = Conversation(cfg['endpoint'], lambda kind, data: AppHelper.callAfter(chat_event, kind, data), game_context=game.current)
 
     def accept_screen(payload, generation):
         nonlocal screen_generation, active_kind

@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Whale Bridge
+## Notes: Read-only quest and location context for the DSH whale companion.
+## Author: dsh-whale-girl contributors
+## Version: 0.1.0
+## License: CC-BY-NC-SA-4.0
+Protocol.lua
+WhaleBridge.lua

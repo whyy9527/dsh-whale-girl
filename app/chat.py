@@ -4,9 +4,10 @@ import requests
 
 
 class Conversation:
-    def __init__(self, endpoint, publish):
+    def __init__(self, endpoint, publish, game_context=None):
         self.endpoint = endpoint.rstrip('/')
         self.publish = publish
+        self.game_context = game_context
         self.stop_event = threading.Event()
         self.busy = False
 
@@ -58,6 +59,8 @@ class Conversation:
         terminal = None
         try:
             if pending is None:
+                if path == '/chat' and self.game_context is not None:
+                    payload['game'] = self.game_context()
                 response = requests.post(self.endpoint + path, json=payload, timeout=30)
                 pending = response.json()
                 if not pending.get('ok'):
