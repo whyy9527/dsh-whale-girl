@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageChops
 from theme import SURFACE_RGBA, BORDER_RGBA
 
 BASE = 512
@@ -61,17 +61,30 @@ def render_popout(image: Image.Image, mood: str) -> Image.Image:
     draw.arc(tuple(v + (8 if i < 2 else -8) for i, v in enumerate(circle)),
              195, 325, fill=(255, 255, 255, 180), width=3)
 
+    # A cutout touching its bottom edge is a cropped bust: tuck its cut edge into the base.
+    cropped_bust = image.getchannel("A").crop((0, image.height - 1, image.width, image.height)).getbbox() is not None
     character = image.crop(image.getchannel("A").getbbox())
-    scale = min(size * .88 / character.width, size * .92 / character.height)
+    scale = min(size * (.92 if cropped_bust else .88) / character.width, size * .92 / character.height)
     character = character.resize((round(character.width * scale), round(character.height * scale)), Image.Resampling.LANCZOS)
-    x, y = (size - character.width) // 2, int(size * .035)
+    x = (size - character.width) // 2
+    y = round(circle[3] - character.height) if cropped_bust else int(size * .035)
+    foreground = Image.new("RGBA", canvas.size)
+    foreground.alpha_composite(character, (x, y))
+    if cropped_bust:
+        mask = Image.new("L", canvas.size)
+        allowed = ImageDraw.Draw(mask)
+        allowed.ellipse(circle, fill=255)
+        allowed.rectangle((0, 0, size, (circle[1] + circle[3]) / 2), fill=255)
+        foreground.putalpha(ImageChops.multiply(foreground.getchannel("A"), mask))
     silhouette = Image.new("RGBA", canvas.size)
-    silhouette.paste(character, (x + 3, y + 16))
+    silhouette.paste(foreground, (3, 16))
     alpha = silhouette.getchannel("A").point(lambda value: int(value * .45))
     shadow = Image.new("RGBA", canvas.size, (0, 4, 14, 0))
     shadow.putalpha(alpha.filter(ImageFilter.GaussianBlur(14)))
     canvas.alpha_composite(shadow)
-    canvas.alpha_composite(character, (x, y))
+    canvas.alpha_composite(foreground)
+    if cropped_bust:
+        ImageDraw.Draw(canvas).arc(circle, 0, 180, fill=BORDER_RGBA, width=5)
     return canvas.resize((BASE, BASE), Image.Resampling.LANCZOS)
 
 
@@ -94,7 +107,7 @@ def render_all(cache_dir: Path, expressions: Path | None = None) -> dict[str, Pa
         if source is None:
             raise FileNotFoundError(f"Missing expression: {mood}.png or {mood}.webp")
         stat = source.stat()
-        identity = f"popout-v4-shared-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        identity = f"popout-v5-shared-blue:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
         stamp = hashlib.sha256(identity.encode()).hexdigest()[:20]
         target = cache_dir / f"expr-{mood}-{stamp}.png"
         if not target.exists():
