@@ -52,10 +52,10 @@ DEFAULTS = {
     # 浮窗
     "avatar": {
         "size": 132,
+        "expressionsPath": str(CONFIG_PATH.parent / "expressions"),
         "x": 48,
         "y": 240,
         "alwaysOnTop": True,
-        "portraitPath": str(ROOT / "assets" / "character" / "portrait.png"),
     },
     "bubbleHideAfterSec": 12,
 }
@@ -73,6 +73,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def load() -> dict:
     """读配置；文件不存在就用默认值（并顺手建目录）。"""
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    (CONFIG_PATH.parent / "expressions").mkdir(exist_ok=True)
     if not CONFIG_PATH.exists():
         config = _deep_merge(DEFAULTS, {})
         save(config)

@@ -240,8 +240,8 @@ PID_PATH = config_module.CONFIG_PATH.parent / "overlay.pid"
 def build_overlay(cfg: dict) -> Overlay:
     import art
 
-    portrait = cfg.get("avatar", {}).get("portraitPath") or None
-    art_paths = art.render_all(config_module.CACHE_DIR, portrait)
+    expressions = cfg.get("avatar", {}).get("expressionsPath")
+    art_paths = art.render_all(config_module.CACHE_DIR, expressions=expressions)
     overlay = Overlay.alloc().initWithArt_({mood: str(path) for mood, path in art_paths.items()})
     avatar = cfg.get("avatar", {})
     overlay._configure(
@@ -251,6 +251,14 @@ def build_overlay(cfg: dict) -> Overlay:
         bubble_hide=cfg.get("bubbleHideAfterSec", 12),
         always_on_top=avatar.get("alwaysOnTop", True),
     )
+    def refresh_art(_timer):
+        if overlay._drag._drag_start is not None:
+            return
+        try:
+            overlay._reload_art(art.render_all(config_module.CACHE_DIR, expressions=expressions))
+        except OSError as error:
+            print(f"[avatar] {error}", flush=True)
+    overlay._art_timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1.0, True, refresh_art)
     return overlay
 
 
@@ -263,8 +271,7 @@ def run_check(cfg: dict) -> int:
     print("endpoint:", cfg.get("endpoint"))
 
     print("\n== 素材 ==")
-    portrait = cfg.get("avatar", {}).get("portraitPath") or None
-    paths = art.render_all(config_module.CACHE_DIR, portrait)
+    paths = art.render_all(config_module.CACHE_DIR, expressions=cfg.get("avatar", {}).get("expressionsPath"))
     print(", ".join(f"{mood}={path.name}" for mood, path in paths.items()))
 
     print("\n== 插件 ==")
@@ -362,6 +369,8 @@ def main() -> int:
         if brain is not None:
             brain.stop()
         signal_timer.invalidate()
+        if overlay._art_timer is not None:
+            overlay._art_timer.invalidate()
         speaker.shutdown()
         instance.close()
         print("[lifecycle] stopped: audio worker reaped, instance lock released", flush=True)
@@ -385,6 +394,10 @@ def main() -> int:
         elif action == "pause":
             paused = brain.toggle_pause()
             overlay._show_comment("那我先闭会儿眼。" if paused else "继续盯着你。", "bored" if paused else "happy")
+        elif action == "expressions":
+            folder = Path(cfg["avatar"]["expressionsPath"]).expanduser()
+            folder.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["open", str(folder)], check=False)
         elif action == "config":
             subprocess.run(["open", str(config_module.CONFIG_PATH.parent)], check=False)
         elif action == "quit":

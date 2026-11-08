@@ -1,4 +1,4 @@
-"""浮在所有窗口上的鲸鱼娘：一颗圆头像 + 一个气泡。
+"""浮在所有窗口上的鲸鱼娘：圆形底座 + 透明出框人物 + 一个气泡。
 
 用 Cocoa 而不是 tkinter，是因为需要一个"真·逐像素透明"的无边框窗口：
 tkinter 在 macOS 上只能整窗调 alpha，做不到圆形头像旁边只有气泡、其余全透。
@@ -28,6 +28,7 @@ from AppKit import (
     NSMakeRect,
     NSMakeSize,
     NSMenu,
+    NSEvent,
     NSMenuItem,
     NSMutableParagraphStyle,
     NSParagraphStyleAttributeName,
@@ -161,27 +162,32 @@ class DragView(NSView):
         return True
 
     def mouseDown_(self, event) -> None:
-        self._drag_start = event.locationInWindow()
+        self._drag_start = NSEvent.mouseLocation()
         self._window_origin = self.window().frame().origin
         self._moved = False
 
     def mouseDragged_(self, event) -> None:
         if self._drag_start is None:
             return
-        current = event.locationInWindow()
+        current = NSEvent.mouseLocation()
         dx = current.x - self._drag_start.x
         dy = current.y - self._drag_start.y
         if abs(dx) > 2 or abs(dy) > 2:
             self._moved = True
-        self.window().setFrameOrigin_(NSMakePoint(self._window_origin.x + dx, self._window_origin.y + dy))
-
-    def mouseUp_(self, _event) -> None:
         if self._moved:
+            self.window().setFrameOrigin_(NSMakePoint(self._window_origin.x + dx, self._window_origin.y + dy))
+
+    def mouseUp_(self, event) -> None:
+        moved = self._moved
+        if moved:
+            self.mouseDragged_(event)
+        self._drag_start = None
+        if moved:
             origin = self.window().frame().origin
             self._overlay._notify_moved(int(origin.x), int(origin.y))
         else:
             self._overlay._popup_menu()
-        self._drag_start = None
+        self._overlay._finish_drag()
 
     def rightMouseDown_(self, _event) -> None:
         self._overlay._popup_menu()
@@ -195,6 +201,8 @@ class Overlay(NSObject):
         if self is None:
             return None
         self._art = dict(art_paths)
+        self._images = {mood: NSImage.alloc().initWithContentsOfFile_(str(path)) for mood, path in art_paths.items()}
+        self._art_timer = None
         self._avatar_size = 132
         self._visible = False
         self._hide_timer = None
@@ -202,6 +210,8 @@ class Overlay(NSObject):
         self._bubble_hide_after = 12.0
         self._on_menu = None
         self._mood = 'idle'
+        self._pending_comment = None
+        self._hide_pending = False
 
         self._window = WhaleWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, self._avatar_size, self._avatar_size),
@@ -229,10 +239,7 @@ class Overlay(NSObject):
         self._avatar.setImageScaling_(NSImageScaleProportionallyUpOrDown)
         self._avatar.setWantsLayer_(True)
         layer = self._avatar.layer()
-        layer.setMasksToBounds_(True)
-        layer.setCornerRadius_(self._avatar_size / 2.0)
-        layer.setBorderWidth_(2.0)
-        layer.setBorderColor_(_color(0.42, 0.85, 0.95, 0.9).CGColor())
+        layer.setMasksToBounds_(False)
         layer.setShadowColor_(_color(0, 0, 0, 0.55).CGColor())
         layer.setShadowOpacity_(1.0)
         layer.setShadowRadius_(14.0)
@@ -256,7 +263,6 @@ class Overlay(NSObject):
         self._avatar_size = int(size)
         self._bubble_hide_after = float(bubble_hide)
         self._avatar.setFrame_(NSMakeRect(0, 0, self._avatar_size, self._avatar_size))
-        self._avatar.layer().setCornerRadius_(self._avatar_size / 2.0)
         self._window.setLevel_(NSStatusWindowLevel if always_on_top else 0)
         self._resize_to_avatar()
         self._window.setFrameOrigin_(NSMakePoint(int(x), int(y)))
@@ -267,6 +273,9 @@ class Overlay(NSObject):
         """在气泡里显示一句话；已经显示着就原地换字。"""
         text = str(text or '').strip()
         if text == '':
+            return
+        if self._drag._drag_start is not None:
+            self._pending_comment = (text, mood)
             return
         self._set_mood(mood)
         self._bubble.setText_(text)
@@ -280,6 +289,9 @@ class Overlay(NSObject):
 
     @python_method
     def _hide_comment(self):
+        if self._drag._drag_start is not None:
+            self._hide_pending = True
+            return
         if not self._visible:
             return
         self._visible = False
@@ -288,9 +300,19 @@ class Overlay(NSObject):
 
     @python_method
     def _notify_moved(self, x, y):
+        y += int(self._avatar.frame().origin.y)
         self._origin = (x, y)
         if self._on_menu:
             self._on_menu('moved', (x, y))
+
+    @python_method
+    def _finish_drag(self):
+        pending, self._pending_comment = self._pending_comment, None
+        hide, self._hide_pending = self._hide_pending, False
+        if pending:
+            self._show_comment(*pending)
+        elif hide:
+            self._hide_comment()
 
     @python_method
     def _set_callback(self, handler):
@@ -317,14 +339,14 @@ class Overlay(NSObject):
     @python_method
     def _apply_layout(self, total_width, total_height, bubble_height):
         frame = self._window.frame()
-        top = frame.origin.y + frame.size.height
+        anchor_y = frame.origin.y + self._avatar.frame().origin.y
+        avatar_y = (total_height - self._avatar_size) / 2.0
         self._window.setFrame_display_(
-            NSMakeRect(frame.origin.x, top - total_height, total_width, total_height), True
+            NSMakeRect(frame.origin.x, anchor_y - avatar_y, total_width, total_height), True
         )
         container = self._window.contentView()
         container.setFrame_(NSMakeRect(0, 0, total_width, total_height))
 
-        avatar_y = (total_height - self._avatar_size) / 2.0
         self._avatar.setFrame_(NSMakeRect(0, avatar_y, self._avatar_size, self._avatar_size))
 
         bubble_width = total_width - self._avatar_size - AVATAR_GAP
@@ -337,9 +359,9 @@ class Overlay(NSObject):
     @python_method
     def _resize_to_avatar(self):
         frame = self._window.frame()
-        top = frame.origin.y + frame.size.height
+        anchor_y = frame.origin.y + self._avatar.frame().origin.y
         size = self._avatar_size
-        self._window.setFrame_display_(NSMakeRect(frame.origin.x, top - size, size, size), True)
+        self._window.setFrame_display_(NSMakeRect(frame.origin.x, anchor_y, size, size), True)
         self._window.contentView().setFrame_(NSMakeRect(0, 0, size, size))
         self._avatar.setFrame_(NSMakeRect(0, 0, size, size))
         self._drag.setFrame_(NSMakeRect(0, 0, size, size))
@@ -350,11 +372,23 @@ class Overlay(NSObject):
     @python_method
     def _set_mood(self, mood):
         self._mood = mood if mood in self._art else 'idle'
-        path = self._art.get(self._mood)
-        if path:
-            image = NSImage.alloc().initWithContentsOfFile_(str(path))
-            if image is not None:
-                self._avatar.setImage_(image)
+        image = self._images.get(self._mood)
+        if image is not None:
+            self._avatar.setImage_(image)
+
+    @python_method
+    def _reload_art(self, paths):
+        if paths == self._art:
+            return
+        images = dict(self._images)
+        for mood, path in paths.items():
+            if path != self._art.get(mood):
+                image = NSImage.alloc().initWithContentsOfFile_(str(path))
+                if image is None:
+                    raise OSError(f"Cannot load avatar: {path}")
+                images[mood] = image
+        self._images, self._art = images, dict(paths)
+        self._set_mood(self._mood)
 
     @python_method
     def _schedule_hide(self):
@@ -376,6 +410,7 @@ class Overlay(NSObject):
         for title, action in (
             ('现在看一眼', b'menuLook:'),
             ('暂停 / 继续', b'menuPause:'),
+            ('打开表情文件夹', b'menuExpressions:'),
             ('打开配置文件夹', b'menuConfig:'),
             ('退出鲸鱼娘', b'menuQuit:'),
         ):
@@ -392,6 +427,10 @@ class Overlay(NSObject):
     def menuPause_(self, _sender):
         if self._on_menu:
             self._on_menu('pause', None)
+
+    def menuExpressions_(self, _sender):
+        if self._on_menu:
+            self._on_menu('expressions', None)
 
     def menuConfig_(self, _sender):
         if self._on_menu:

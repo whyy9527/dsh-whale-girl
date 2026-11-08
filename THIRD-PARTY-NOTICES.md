@@ -1,10 +1,10 @@
 # Character artwork
 
-The artwork in `assets/expressions/` (six WebP sprites and `preview.jpg`) is a matched six-expression chibi whale-maid series,
+The artwork in `assets/expressions/` (six WebP sprites and `preview.png`) is a matched six-expression chibi whale-maid series,
 selected without pixel edits from [keleus/deepseek-pet](https://github.com/keleus/deepseek-pet)
 at commit `b9b61a35c3b2443ecdeab0ed442d6b33c603d343`.
 The original filenames are recorded in `assets/expressions/sources.json`.
-The preview arranges the six sprites on a background. Runtime circular framing and mood rings are modifications rendered into a local cache.
+The preview arranges the six sprites on a background. Runtime circular backing, contact shadows, mood rings and transparent character compositing are modifications rendered into a local cache.
 
 These images are **not covered by this project's MIT license**. The character
 artwork is reused under **CC BY-NC-SA 4.0**, retaining the upstream attribution
@@ -14,7 +14,7 @@ chain documented by [AIR-pixel's asset notice](https://github.com/AIR-pixel/deep
 - Maid outfit and DeepSeek redesign: ZipZipPipe, 2026.04. [Author](https://space.bilibili.com/4168597).
 - Desktop-pet sprite assets: [keleus/deepseek-pet](https://github.com/keleus/deepseek-pet).
 - Upstream desktop-pet program and asset reprocessing: air / AIR-pixel, 2026.09.
-- This project: six-state selection and runtime circular framing; no authorship claim over the source art.
+- This project: six-state selection and runtime character-over-circle compositing; no authorship claim over the source art.
 
 [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 requires attribution, non-commercial use and sharing adaptations under the same
