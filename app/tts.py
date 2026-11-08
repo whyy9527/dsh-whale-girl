@@ -260,10 +260,15 @@ class Speaker:
                         else:
                             proc = None
                     if proc is not None:
-                        proc.wait()
+                        result = proc.wait()
                         with self._condition:
                             if self._proc is proc:
                                 self._proc = None
+                            cancelled = generation != self._generation or self._closed
+                        if not cancelled:
+                            if result != 0:
+                                raise RuntimeError(f"音频播放失败，afplay 退出码 {result}")
+                            self.log("[tts] 播放完成 (afplay exit=0)")
                     if path is not None:
                         for old in sorted(self.cache_dir.glob("say-*.wav"), key=lambda p: p.stat().st_mtime)[:-20]:
                             old.unlink(missing_ok=True)
@@ -339,3 +344,4 @@ class Speaker:
             args += ["-v", f"{volume:.2f}"]
         args.append(str(path))
         self._proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.log("[tts] 开始播放")

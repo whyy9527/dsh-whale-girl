@@ -124,7 +124,8 @@ class CocoaDragTests(unittest.TestCase):
     def test_live_timer_loads_and_removes_local_override(self):
         from Foundation import NSDate, NSRunLoop
         from main import build_overlay
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory() as folder, \
+                patch('main.config_module.CACHE_DIR', Path(folder) / 'cache'):
             local = Path(folder)
             (local / 'portrait').mkdir()
             pet = build_overlay({'avatar': {'size': 132, 'expressionsPath': str(local)}})

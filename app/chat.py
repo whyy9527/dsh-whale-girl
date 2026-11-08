@@ -1,7 +1,7 @@
 """One serialized transport for text and observations; DSH owns all conversation memory."""
 import threading
 import requests
-from game import same_task, view as game_view
+from game import guide_is_obsolete
 
 
 class Conversation:
@@ -81,13 +81,10 @@ class Conversation:
                     raise RuntimeError(state.get('error', '读取会话失败'))
                 if state['status'] in ('complete', 'failed'):
                     if state['status'] == 'complete' and pending['requestId'].startswith('whale-guide:'):
-                        # Results stay in native DSH history, but do not speak stale advice.
+                        # Silence only on positive evidence of an obsolete area.
                         current = self.game_context() if self.game_context else None
-                        same = same_task(payload.get('game') if payload else None, current)
-                        if payload and not payload.get('game') and payload.get('gameView'):
-                            same = bool(game_view())
-                        if not same and state.get('text'):
-                            state['suppressed'] = 'game-context-changed'
+                        if guide_is_obsolete(payload.get('game') if payload else None, current) and state.get('text'):
+                            state['suppressed'] = 'game-area-changed'
                             state['text'] = ''
                     terminal = ('state', state)
                     return

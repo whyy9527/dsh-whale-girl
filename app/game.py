@@ -18,21 +18,16 @@ MARKER = np.array([(255, 0, 255), (0, 0, 0), (255, 0, 255), (0, 255, 0),
                    (255, 0, 255), (0, 0, 0), (0, 255, 255), (255, 255, 0)])
 
 
-def same_task(before: dict | None, after: dict | None) -> bool:
-    """Recheck the live task before speaking a potentially slow guide result.
+def guide_is_obsolete(before: dict | None, after: dict | None) -> bool:
+    """Discard only a confirmed client/area change, not ordinary game progress.
 
-    Walking within the same map does not invalidate fixed NPC destinations.
-    Player distance/direction must not be presented as a real-time fact.
+    Missing data is not proof that a fixed destination or a short reaction is
+    obsolete. Replies describe the observed snapshot, never live distance.
     """
-    def signature(state):
-        if not state or state.get('inCombat') or state.get('error'):
-            return None
-        quest = state.get('selectedQuest') or {}
-        return (state.get('build'), state.get('mapId'), state.get('zone'), quest.get('id'),
-                quest.get('complete'), tuple(quest.get('objectives') or []),
-                tuple(sorted((q['id'], q.get('complete', False)) for q in state.get('quests', []))))
-    initial, current = signature(before), signature(after)
-    return initial is not None and initial == current
+    if not before or not after or before.get('error') or after.get('error'):
+        return False
+    return any(before.get(key) is not None and after.get(key) is not None
+               and before[key] != after[key] for key in ('build', 'mapId', 'zone'))
 
 
 def decode(image: Image.Image, now: float | None = None) -> dict | None:

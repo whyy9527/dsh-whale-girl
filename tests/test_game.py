@@ -11,7 +11,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from game import decode, MARKER, COLUMNS, ROWS
-from game import same_task
+from game import guide_is_obsolete
 from chat import Conversation
 from unittest.mock import patch
 
@@ -37,19 +37,37 @@ def panel(state, scale=4, offset=(19, 23), corrupt=False):
 
 
 class GameTests(unittest.TestCase):
-    def test_guide_reply_rechecks_task_and_combat_without_treating_normal_walking_as_stale(self):
-        before = {'mapId': 1429, 'zone': '艾尔文森林', 'x': 42, 'selectedQuest': {'id': 7}, 'quests': [{'id': 7, 'complete': False}]}
-        self.assertTrue(same_task(before, {**before, 'x': 43}))
-        for after in [None, {**before, 'inCombat': True}, {**before, 'mapId': 1436},
-                      {**before, 'selectedQuest': {'id': 8}}, {**before, 'quests': [{'id': 7, 'complete': True}]}]:
-            self.assertFalse(same_task(before, after))
+    def test_guide_delivery_allows_progress_selection_combat_and_missing_data(self):
+        before = {'build': '70862', 'mapId': 1429, 'zone': '艾尔文森林', 'x': 42,
+                  'selectedQuest': {'id': 7, 'complete': False, 'objectives': ['1/8']},
+                  'quests': [{'id': 7, 'complete': False}]}
+        allowed = [None, {'inCombat': True}, {'error': 'unavailable'},
+                   {**before, 'x': 43}, {**before, 'selectedQuest': {'id': 8}},
+                   {**before, 'selectedQuest': {'id': 7, 'complete': False, 'objectives': ['2/8']}},
+                   {**before, 'quests': [{'id': 7, 'complete': True}]}]
+        blocked = [{**before, 'mapId': 1436}, {**before, 'zone': '西部荒野'},
+                   {**before, 'build': 'new'}]
+        for after in allowed + blocked:
+            obsolete = after in blocked
+            self.assertEqual(guide_is_obsolete(before, after), obsolete)
             events = []
             conversation = Conversation('http://localhost', lambda *event: events.append(event), game_context=lambda: after)
             with patch('chat.requests.post') as post, patch('chat.requests.get') as get:
                 post.return_value.json.return_value = {'ok': True, 'sessionId': 'one', 'requestId': 'whale-guide:one', 'kind': 'look'}
-                get.return_value.json.return_value = {'ok': True, 'status': 'complete', 'kind': 'look', 'text': '旧提示'}
+                get.return_value.json.return_value = {'ok': True, 'status': 'complete', 'kind': 'look', 'text': '具体提示'}
                 conversation._run('/look', {'game': before}, None)
-            self.assertEqual(events[-1][1]['text'], '')
+            self.assertEqual(events[-1][1]['text'], '' if obsolete else '具体提示')
+
+    def test_resumed_and_image_only_guide_replies_are_not_dropped_without_original_snapshot(self):
+        for payload in (None, {'game': None, 'gameView': {'client': 'wow-forever'}}):
+            events = []
+            conversation = Conversation('http://localhost', lambda *event: events.append(event), game_context=lambda: None)
+            receipt = {'ok': True, 'sessionId': 'one', 'requestId': 'whale-guide:one', 'kind': 'look'}
+            with patch('chat.requests.post') as post, patch('chat.requests.get') as get:
+                post.return_value.json.return_value = receipt
+                get.return_value.json.return_value = {'ok': True, 'status': 'complete', 'kind': 'look', 'text': '具体提示'}
+                conversation._run('/look' if payload else None, payload, None if payload else receipt)
+            self.assertEqual(events[-1][1]['text'], '具体提示')
 
     def test_unicode_snapshot_survives_scale_position_and_gamma(self):
         state = {'version': 1, 'sampledAt': 100, 'zone': '艾尔文森林', 'selectedQuest': {'id': 7, 'title': '找“人”\\新线索'}}
