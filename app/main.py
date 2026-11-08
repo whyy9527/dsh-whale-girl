@@ -131,7 +131,8 @@ class Brain(threading.Thread):
             self._game_visible = visible
         if state and not state.get('inCombat') and not state.get('error'):
             selected = state.get('selectedQuest') or {}
-            signature = (state.get('mapId'), selected.get('id'),
+            signature = (state.get('mapId'), state.get('subzone'), selected.get('id'),
+                         selected.get('complete'), tuple(selected.get('objectives') or []),
                          tuple(sorted((q['id'], q.get('complete', False)) for q in state.get('quests', []))))
             previous = self._game_signature
             has_task = selected.get('id') or state.get('quests')

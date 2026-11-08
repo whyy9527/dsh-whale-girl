@@ -107,6 +107,26 @@ class DesktopTests(unittest.TestCase):
             decode.return_value = base
             self.assertEqual(len(brain._next_batch()), 1)
 
+    def test_objective_progress_and_subzone_trigger_after_cooldown_without_repeating_static_state(self):
+        brain = Brain({}, Overlay(), Voice())
+        image = Image.new('RGB', (400, 200), 'white')
+        state = {'version': 1, 'mapId': 37, 'subzone': '洞口',
+                 'quests': [{'id': 7, 'complete': False}],
+                 'selectedQuest': {'id': 7, 'complete': False, 'objectives': ['1/8']}}
+        with patch('main.grab', return_value=image), patch('main.game.decode') as decode, \
+                patch('main.game.view', return_value=None), patch.object(brain, '_guide_available', return_value=True):
+            decode.return_value = state
+            self.assertEqual(len(brain._next_batch()), 1)
+            brain.last_sent_at = time.monotonic()
+            decode.return_value = {**state, 'selectedQuest': {**state['selectedQuest'], 'objectives': ['2/8']}}
+            self.assertIsNone(brain._next_batch())
+            brain.last_sent_at -= 21
+            self.assertEqual(len(brain._next_batch()), 1)
+            self.assertIsNone(brain._next_batch())
+            decode.return_value = {**decode.return_value, 'subzone': '洞穴深处'}
+            self.assertEqual(len(brain._next_batch()), 1)
+            self.assertIsNone(brain._next_batch())
+
     def test_instance_lock_released_without_removing_inode(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'overlay.pid'
