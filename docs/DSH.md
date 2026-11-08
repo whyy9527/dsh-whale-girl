@@ -74,6 +74,21 @@ The UI can keep a draft editable during an observation while serializing send.
 Automatic frame filtering still requires substantial changes and never forces a
 comment after an idle interval. A valid empty `say` stays silent in the UI and TTS.
 
+Observation JSON may include `choices`: exactly two distinct nonempty strings,
+at most 12 characters each. Invalid choices do not discard valid speech; silence
+never renders buttons. This optional field is projected only from the matching
+observation turn. Native buttons show below the question and remain until a new
+reply replaces them or the user answers. Busy/approval waits disable them.
+A click consumes the buttons once and submits the question plus the literal
+chosen label through the existing explicit `/chat` path in the same session;
+it never accepts an approval. Normal text answers keep their usual format.
+
+`events` carries at most 12 bounded strings comparing the previous submitted
+non-combat snapshot with the current one. Python derives these descriptions;
+DSH receives them as untrusted data alongside the fresh snapshot and image.
+They never grant tools or imply continuous observation. The previous snapshot
+is transient sampler state, not an independent conversation store.
+
 ## Transport and verification
 
 The plugin binds loopback; browser-Origin requests cannot submit text/images or
@@ -85,6 +100,10 @@ tools in game-guide requests, zero tools in ordinary observations, restored full
 text tools afterward, history reload and pending-image
 resume without replay. Fake-context tests are not evidence of real DSH behavior;
 run the real shared-memory smoke against the loaded plugin as well.
+Run `.venv/bin/python tests/smoke_interaction.py` for a real event-aware question,
+production native-button submission, shared-context followup and actual Qwen
+playback. Its isolated app uses bundled art and captures only its own window.
+The resulting native layout is shown in [the quick-reply capture](../design/quick-replies.png).
 
 ## Optional WoW Forever lookup
 

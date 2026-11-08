@@ -60,6 +60,16 @@ test('parseModelOutput 吃标准 JSON', () => {
   assert.equal(mood, 'smug')
 })
 
+test('optional quick replies require two distinct short labels and a spoken question', () => {
+  const parse = choices => parseModelOutput(JSON.stringify({say: '先交任务还是继续收集？', mood: 'happy', choices}))
+  assert.deepEqual(parse(['先交任务', '继续收集']).choices, ['先交任务', '继续收集'])
+  for (const choices of [['先交任务'], ['重复', '重复'], ['一'.repeat(13), '继续'], [null, '继续']]) {
+    assert.equal(parse(choices).choices, undefined)
+    assert.equal(parse(choices).say, '先交任务还是继续收集？')
+  }
+  assert.equal(parseModelOutput('{"say":"","choices":["先交任务","继续收集"]}').choices, undefined)
+})
+
 test('parseModelOutput 吃 ```json 围栏和前后废话', () => {
   const raw = '好的，这是结果：\n```json\n{"say":"摸鱼三十分钟了。","mood":"bored"}\n```\n以上。'
   const out = parseModelOutput(raw, 40)

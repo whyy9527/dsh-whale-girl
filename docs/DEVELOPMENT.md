@@ -61,7 +61,8 @@ without a pedestal. Each state replaces the entire pose, including gestures and 
 and aligns the complete silhouette to a common bottom baseline. Opaque portrait images remain circular photographs;
 background removal is not performed at runtime. Files refresh while running;
 dragging defers image/layout updates until release. Only the character frame owns
-click/drag actions; the speech bubble and the gap beside it do not open controls. The cache key includes mode,
+click/drag actions; explicit quick-reply buttons accept bubble clicks, while the
+bubble background and gap do not open controls. The cache key includes mode,
 source identity, nanosecond mtime, size and renderer version.
 
 The current personal originals and derived artwork are not publicly licensed.
@@ -121,14 +122,8 @@ This is sampled screen understanding, not a video recording.
 Pause stops automatic capture and speech and discards stale replies. Text and image admissions are serialized into the same DSH session; pending work
 suspends further sampling. The native session owns shared history and automatic
 compaction. Ordinary observations have zero tools; game-guide observations may
-use only the three read-only tools in `lib/game.js`. Before speaking a structured
-game-guide reply, the desktop reads the current panel again: changed task, zone,
-combat or missing data suppresses stale advice. Image-only help instead rechecks
-that Forever is still in the foreground; it cannot track hidden task/position
-changes during the query and must avoid live distance/direction claims.
-Pending guide replies restored after a
-restart lack that original comparison snapshot and stay silent; their results
-remain in DSH history. Speech has one consumer and replaces pending old text.
+use only the three read-only tools in `lib/game.js`. Reply freshness and game-event/quick-reply behavior are owned by [the game bridge contract](WOW.md)
+and [the DSH contract](DSH.md). Speech has one consumer and replaces pending old text.
 Termination cleanup belongs to `applicationWillTerminate:` because AppKit can
 exit without returning from `runEventLoop`; the repeating Python timer lets
 SIGTERM be handled while Cocoa idles. Stop the worker before joining its thread.
@@ -143,3 +138,7 @@ Run the checks in AGENTS.md. Internal flags `--check`, `--preview`, `--demo
 --once`, `--stop`, and `--restart` support local verification. They do not replace
 plugin startup. A real test should exercise text input, both display modes,
 dragging, permission waits, restart/exit, and a local TTS synthesis.
+
+The native interaction smoke requires a completion receipt written after both
+playbacks and the button followup. A zero child exit alone is insufficient:
+AppKit may terminate the process without unwinding Python assertions.

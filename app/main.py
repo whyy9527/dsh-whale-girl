@@ -76,6 +76,7 @@ class Brain(threading.Thread):
         self._seen_pause_generation = 0
         self._game_signature = None
         self._game_visible = False
+        self._previous_game = None
 
     # ---------- 主循环 ----------
 
@@ -131,7 +132,7 @@ class Brain(threading.Thread):
             self._game_visible = visible
         if state and not state.get('inCombat') and not state.get('error'):
             selected = state.get('selectedQuest') or {}
-            signature = (state.get('mapId'), state.get('subzone'), selected.get('id'),
+            signature = (state.get('mapId'), state.get('subzone'), state.get('level'), selected.get('id'),
                          selected.get('complete'), tuple(selected.get('objectives') or []),
                          tuple(sorted((q['id'], q.get('complete', False)) for q in state.get('quests', []))))
             previous = self._game_signature
@@ -191,8 +192,10 @@ class Brain(threading.Thread):
         span = 0.0
         if len(batch) >= 2:
             span = batch[-1].taken_at - batch[0].taken_at
+        state = game.decode(batch[-1].image)
         return {"frames": frames, "spanSec": span, "grid": use_grid, "cellCount": len(batch),
-                "game": game.decode(batch[-1].image), "gameView": game.view() if not self.demo else None}
+                "game": state, "events": game.changes(self._previous_game, state),
+                "gameView": game.view() if not self.demo else None}
 
     def _send(self, batch, force: bool = False) -> None:
         if not force and not self._can_send():
@@ -208,10 +211,13 @@ class Brain(threading.Thread):
         payload['manual'] = force
         AppHelper.callAfter(self.submit_screen, payload, self.pause_generation)
 
-    def _deliver_comment(self, say, mood, generation, manual=False):
+    def _deliver_comment(self, say, mood, generation, manual=False, choices=None):
         if self.stop_event.is_set() or self.request_active or generation != self.pause_generation or (self.paused and not manual):
             return
-        self.overlay._show_comment(say, mood)
+        if choices:
+            self.overlay._show_comment(say, mood, choices)
+        else:
+            self.overlay._show_comment(say, mood)
         self.speaker.speak_async(say)
 
     # ---------- 其它 ----------
@@ -417,6 +423,7 @@ def main() -> int:
 
     def show_busy(status, busy=True):
         overlay._controls._set_busy(busy, status, allow_draft=active_kind == 'look')
+        overlay._set_choices_enabled(not busy)
 
     def chat_event(kind, data):
         nonlocal active_kind, active_manual
@@ -454,7 +461,7 @@ def main() -> int:
                               (data['suppressed'] if data.get('suppressed') else 'reply' if text else 'model-silent'))
                     if text and screen_generation == brain.pause_generation and (not brain.paused or active_manual):
                         overlay._controls._append('看屏', text)
-                        brain._deliver_comment(text, data.get('mood', 'idle'), screen_generation, active_manual)
+                        brain._deliver_comment(text, data.get('mood', 'idle'), screen_generation, active_manual, data.get('choices'))
                 else:
                     if text:
                         overlay._controls._append('DSH', text)
@@ -484,6 +491,8 @@ def main() -> int:
             return
         screen_generation = generation
         if conversation.look(payload, cfg['chat']['sessionId'], cfg['chat']['workspacePath']):
+            if payload.get('game') and not payload['game'].get('inCombat') and not payload['game'].get('error'):
+                brain._previous_game = payload['game']
             active_kind = 'look'
             brain.request_active = True
             show_busy('正在交给 DSH 观察…')
@@ -505,14 +514,17 @@ def main() -> int:
         nonlocal active_kind
         if action == 'look':
             brain.request_look()
-        elif action == 'send':
+        elif action in ('send', 'reply'):
+            if action == 'reply':
+                value = game.choice_reply(*value)
             if conversation.send(value, cfg['chat']['sessionId'], cfg['chat']['workspacePath']):
                 active_kind = 'text'
                 brain.request_active = True
                 brain.pause_generation += 1
                 speaker.stop()
+                overlay._clear_choices()
                 overlay._controls._append('你', value)
-                overlay._controls._set_busy(True, '正在交给 DSH…')
+                show_busy('正在交给 DSH…')
         elif action == 'watch':
             if bool(value) == brain.paused:
                 brain.toggle_pause()

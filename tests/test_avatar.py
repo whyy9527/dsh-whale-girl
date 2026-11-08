@@ -142,6 +142,32 @@ class CocoaDragTests(unittest.TestCase):
                 pet._close_controls()
                 pet._window.close()
 
+    def test_native_quick_reply_click_is_bound_to_question_busy_safe_and_consumed_once(self):
+        pet = ui.Overlay.alloc().initWithArt_(self.paths)
+        received = []
+        def reply(action, value):
+            received.append((action, value))
+            pet._clear_choices()
+        pet._set_callback(reply)
+        try:
+            pet._show_comment('先交任务还是继续收集？', 'happy', ['先交任务', '继续收集'])
+            self.assertIsNone(pet._hide_timer)
+            button = pet._bubble._buttons[0]
+            point = pet._window.contentView().convertPoint_fromView_(NSMakePoint(10, 10), button)
+            self.assertEqual(pet._window.contentView().hitTest_(point), button)
+            pet._set_choices_enabled(False)
+            button.performClick_(None)
+            self.assertEqual(received, [])
+            pet._set_choices_enabled(True)
+            button.performClick_(None)
+            button.performClick_(None)
+            self.assertEqual(received, [('reply', ('先交任务还是继续收集？', '先交任务'))])
+        finally:
+            if pet._hide_timer:
+                pet._hide_timer.invalidate()
+            pet._close_controls()
+            pet._window.close()
+
 
 if __name__ == '__main__':
     unittest.main()

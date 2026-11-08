@@ -14,8 +14,11 @@ from AppKit import (
     NSAttributedString,
     NSApplication,
     NSApplicationActivationPolicyAccessory,
+    NSAppearance,
+    NSAppearanceNameAqua,
     NSBackingStoreBuffered,
     NSBezierPath,
+    NSButton,
     NSColor,
     NSFont,
     NSFontAttributeName,
@@ -76,6 +79,11 @@ class WhaleWindow(NSWindow):
         return False
 
 
+class ChoiceButton(NSButton):
+    def acceptsFirstMouse_(self, _event):
+        return True
+
+
 class BubbleView(NSView):
     """圆角气泡，左边一个小尖角指向头像。"""
 
@@ -94,7 +102,36 @@ class BubbleView(NSView):
         cell.setWraps_(True)
         cell.setLineBreakMode_(NSLineBreakByWordWrapping)
         self.addSubview_(self._label)
+        self._choices = []
+        self._buttons = []
+        self._choices_enabled = True
+        for index in range(2):
+            button = ChoiceButton.alloc().initWithFrame_(NSMakeRect(0, 0, 10, 26))
+            button.setAppearance_(NSAppearance.appearanceNamed_(NSAppearanceNameAqua))
+            button.setBezelStyle_(1)
+            button.setFont_(NSFont.systemFontOfSize_(12))
+            button.setTag_(index)
+            button.setTarget_(self)
+            button.setAction_(b'chooseReply:')
+            button.setHidden_(True)
+            self.addSubview_(button)
+            self._buttons.append(button)
         return self
+
+    @python_method
+    def _set_choices(self, choices):
+        self._choices = list(choices or [])
+        for index, button in enumerate(self._buttons):
+            button.setHidden_(len(self._choices) != 2)
+            button.setEnabled_(self._choices_enabled)
+            if len(self._choices) == 2:
+                button.setTitle_(self._choices[index])
+                button.setAccessibilityLabel_(self._choices[index])
+
+    def chooseReply_(self, sender):
+        index = sender.tag()
+        if self._choices_enabled and sender.isEnabled() and 0 <= index < len(self._choices):
+            self._overlay._dispatch('reply', (self.text(), self._choices[index]))
 
     def setText_(self, text: str) -> None:
         self._text = text or ''
@@ -143,14 +180,19 @@ class BubbleView(NSView):
 
     @python_method
     def _layout_label(self, width: float, height: float) -> None:
+        choice_height = 34 if self._choices else 0
         self._label.setFrame_(
             NSMakeRect(
                 BUBBLE_PADDING + BUBBLE_TAIL,
-                BUBBLE_PADDING,
+                BUBBLE_PADDING + choice_height,
                 max(10.0, width - BUBBLE_PADDING * 2 - BUBBLE_TAIL),
-                max(10.0, height - BUBBLE_PADDING * 2),
+                max(10.0, height - BUBBLE_PADDING * 2 - choice_height),
             )
         )
+        button_width = (width - BUBBLE_TAIL - BUBBLE_PADDING * 2 - 8) / 2
+        for index, button in enumerate(self._buttons):
+            button.setFrame_(NSMakeRect(BUBBLE_TAIL + BUBBLE_PADDING + index * (button_width + 8),
+                                        BUBBLE_PADDING - 2, button_width, 28))
 
 
 class DragView(NSView):
@@ -256,6 +298,7 @@ class Overlay(NSObject):
         container.addSubview_(self._avatar)
 
         self._bubble = BubbleView.alloc().initWithFrame_(NSMakeRect(0, 0, 10, 10))
+        self._bubble._overlay = self
         self._bubble.setHidden_(True)
         container.addSubview_(self._bubble)
 
@@ -284,16 +327,17 @@ class Overlay(NSObject):
         self._window.orderFrontRegardless()
 
     @python_method
-    def _show_comment(self, text, mood='idle'):
+    def _show_comment(self, text, mood='idle', choices=None):
         """在气泡里显示一句话；已经显示着就原地换字。"""
         text = str(text or '').strip()
         if text == '':
             return
         if self._drag._drag_start is not None:
-            self._pending_comment = (text, mood)
+            self._pending_comment = (text, mood, choices)
             return
         self._set_mood(mood)
         self._bubble.setText_(text)
+        self._bubble._set_choices(choices)
         self._bubble.setHidden_(False)
         self._bubble.setNeedsDisplay_(True)
         total_width, total_height, bubble_height = self._measure(text)
@@ -301,6 +345,17 @@ class Overlay(NSObject):
         self._window.orderFrontRegardless()
         self._visible = True
         self._schedule_hide()
+
+    @python_method
+    def _set_choices_enabled(self, enabled):
+        self._bubble._choices_enabled = bool(enabled)
+        for button in self._bubble._buttons:
+            button.setEnabled_(bool(enabled))
+
+    @python_method
+    def _clear_choices(self):
+        if self._bubble._choices:
+            self._show_comment(self._bubble.text(), self._mood)
 
     @python_method
     def _hide_comment(self):
@@ -347,6 +402,11 @@ class Overlay(NSObject):
         text_height = math.ceil(rect.size.height) + 2
         bubble_height = text_height + BUBBLE_PADDING * 2
         bubble_width = min(MAX_BUBBLE_WIDTH, math.ceil(rect.size.width) + BUBBLE_PADDING * 2 + 6) + BUBBLE_TAIL
+        if self._bubble._choices:
+            font = {NSFontAttributeName: NSFont.systemFontOfSize_(12)}
+            buttons_width = sum(NSString.stringWithString_(c).sizeWithAttributes_(font).width + 24 for c in self._bubble._choices)
+            bubble_width = max(bubble_width, math.ceil(buttons_width) + 8 + BUBBLE_PADDING * 2 + BUBBLE_TAIL)
+            bubble_height += 34
         total_height = max(self._avatar_height, bubble_height)
         total_width = self._avatar_size + AVATAR_GAP + bubble_width
         return total_width, total_height, bubble_height
@@ -409,6 +469,9 @@ class Overlay(NSObject):
     def _schedule_hide(self):
         if self._hide_timer is not None:
             self._hide_timer.invalidate()
+            self._hide_timer = None
+        if self._bubble._choices:
+            return
         self._hide_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             max(4.0, self._bubble_hide_after), self, b'timerFired:', None, False
         )

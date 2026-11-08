@@ -11,7 +11,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from game import decode, MARKER, COLUMNS, ROWS
-from game import guide_is_obsolete
+from game import guide_is_obsolete, changes, choice_reply
 from chat import Conversation
 from unittest.mock import patch
 
@@ -37,6 +37,21 @@ def panel(state, scale=4, offset=(19, 23), corrupt=False):
 
 
 class GameTests(unittest.TestCase):
+    def test_events_describe_real_progress_without_inventing_actions_or_turn_in(self):
+        before = {'zone': '丹莫罗', 'level': 7, 'selectedQuest': {'id': 313, 'title': '灰色洞穴', 'objectives': ['1/8']},
+                  'quests': [{'id': 313, 'complete': False}]}
+        after = {**before, 'level': 8, 'selectedQuest': {**before['selectedQuest'], 'objectives': ['8/8']},
+                 'quests': [{'id': 313, 'complete': True}]}
+        self.assertEqual(changes(before, before), [])
+        events = changes(before, after)
+        self.assertTrue(any('1/8 → 8/8' in e for e in events))
+        self.assertIn('等级：7 → 8', events)
+        self.assertIn('任务 313：未完成 → 已完成', events)
+        self.assertEqual(changes(before, {'inCombat': True}), [])
+        self.assertEqual(changes(before, {**before, 'quests': [], 'truncated': True}), [])
+        self.assertIn('不能据此断言已交付', changes(before, {**before, 'quests': []})[0])
+        self.assertIn('先交任务', choice_reply('先交任务还是继续？', '先交任务'))
+
     def test_guide_delivery_allows_progress_selection_combat_and_missing_data(self):
         before = {'build': '70862', 'mapId': 1429, 'zone': '艾尔文森林', 'x': 42,
                   'selectedQuest': {'id': 7, 'complete': False, 'objectives': ['1/8']},

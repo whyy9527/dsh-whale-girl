@@ -18,6 +18,41 @@ MARKER = np.array([(255, 0, 255), (0, 0, 0), (255, 0, 255), (0, 255, 0),
                    (255, 0, 255), (0, 0, 0), (0, 255, 255), (255, 255, 0)])
 
 
+def changes(before: dict | None, after: dict | None) -> list[str]:
+    """Describe differences between submitted public snapshots, not inferred actions."""
+    if not after or after.get('error') or after.get('inCombat'):
+        return []
+    quest = after.get('selectedQuest') or {}
+    if not before or before.get('error') or before.get('inCombat'):
+        return [f"首次观察：{after.get('zone', '')}；选中任务“{quest.get('title', '')}”({quest.get('id', '未知')})"]
+    events = []
+    if (before.get('zone'), before.get('subzone')) != (after.get('zone'), after.get('subzone')):
+        events.append(f"区域：{before.get('zone', '')}/{before.get('subzone', '')} → {after.get('zone', '')}/{after.get('subzone', '')}")
+    if before.get('level') is not None and after.get('level') is not None and before['level'] != after['level']:
+        events.append(f"等级：{before['level']} → {after['level']}")
+    old = before.get('selectedQuest') or {}
+    if old.get('id') != quest.get('id'):
+        events.append(f"选中任务：{old.get('title', '')}({old.get('id', '无')}) → {quest.get('title', '')}({quest.get('id', '无')})；仅表示选中项变化，不代表用户已决定目标")
+    elif old.get('objectives') != quest.get('objectives'):
+        events.append(f"任务“{quest.get('title', '')}”({quest.get('id')})目标：{'；'.join(old.get('objectives') or [])} → {'；'.join(quest.get('objectives') or [])}")
+    previous = {q['id']: q.get('complete', False) for q in before.get('quests', [])}
+    current = {q['id']: q.get('complete', False) for q in after.get('quests', [])}
+    for qid, complete in current.items():
+        if qid not in previous:
+            events.append(f"任务列表新增：{qid}，{'已完成' if complete else '未完成'}")
+        elif previous[qid] != complete:
+            events.append(f"任务 {qid}：{'已完成' if previous[qid] else '未完成'} → {'已完成' if complete else '未完成'}")
+    # A truncated list cannot prove removal, and removal does not prove turn-in.
+    if not after.get('truncated'):
+        events.extend(f"任务列表不再显示：{qid}（不能据此断言已交付）" for qid in previous.keys() - current.keys())
+    return [event[:1000] for event in events[:12]]
+
+
+def choice_reply(question: str, choice: str) -> str:
+    """A native button click is an explicit answer, anchored to its question."""
+    return f'关于你刚才问的“{question}”，我选“{choice}”。请接着这个选择回应。'
+
+
 def guide_is_obsolete(before: dict | None, after: dict | None) -> bool:
     """Discard only a confirmed client/area change, not ordinary game progress.
 
