@@ -3,8 +3,8 @@
 
 跑起来之后它做四件事，循环往复：
   1. 每隔几秒截一张屏；
-  2. 画面变化够大才留下，凑够九张拼成一张九宫格；
-  3. 把九宫格发给 DSH 插件（插件再让 DeepSeek 说一句）；
+  2. 画面变化够大才留下，默认凑够四张拼成一张四宫格；
+  3. 把拼图发给 DSH 插件（插件再让 DeepSeek 说一句）；
   4. 气泡显示那一句，同时用 Qwen TTS 念出来。
 
 用法：
@@ -63,7 +63,7 @@ class Brain(threading.Thread):
         self.picker = FramePicker(
             threshold=float(cfg.get("diffThreshold", 0.06)),
             min_changed_ratio=float(cfg.get("minChangedRatio", 0.18)),
-            batch_size=int(cfg.get("batchSize", 9)),
+            batch_size=int(cfg.get("batchSize", 4)),
         )
         self.stop_event = threading.Event()
         self.force_look = threading.Event()
@@ -178,7 +178,7 @@ class Brain(threading.Thread):
         mode = str(self.cfg.get("sendMode", "grid"))
         if not batch:
             return {"frames": [], "spanSec": 0}
-        use_grid = mode == "grid" and len(batch) == 9
+        use_grid = mode == "grid" and len(batch) in (4, 9)
         if not use_grid:
             frames = [
                 {"data": base64.b64encode(frame_to_jpeg(item.image)).decode("ascii"), "ts": item.stamp}

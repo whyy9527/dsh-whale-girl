@@ -25,3 +25,9 @@
 接口核对使用 [Forever 客户端 API 源码镜像](https://github.com/Gethe/wow-ui-source/tree/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated)。
 WhaleBridge、线路编码和解码均为本项目独立实现，未复制上述项目代码，详情见
 [游戏数据桥](WOW.md)。
+
+菜单的 UX 资料调研实际查阅了
+[Impeccable](https://github.com/pbakaus/impeccable) 的界面审查方法与
+[UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) 的规则库说明。
+本轮采用内置 imagegen 生成菜单概念图，并独立实现原生 AppKit 控件与实窗验证；
+没有复制第三方代码或引入其执行器。

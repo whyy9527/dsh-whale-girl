@@ -16,7 +16,8 @@ copies of configuration defaults.
 - `app/config.py`: sole owner of settings defaults. User settings live under
   `$DSH_HOME/whale-girl/`, normally `~/.dsh/whale-girl/`.
 - `app/theme.py` and `app/glass.py`: shared material and native drawing, based on
-  [generated design](design/surface-study.png). Do not redraw characters for UI changes.
+  [bubble/base study](design/surface-study.png) and [control-panel study](design/menu-study.png).
+  Do not redraw characters for UI changes.
 - `app/autostart.py`: the login job starts `dsh web --no-open`; the plugin starts
   the overlay. Do not introduce a second independent login launcher for Python.
 
@@ -41,7 +42,7 @@ Before editing runtime, assets or setup, read the relevant section of
 - Keep comments gentle, brief and lightly playful. No sarcasm about the user’s
   effort, ability or idle time; silence is a valid model result.
   Use the shared task context to contribute a clue or natural response; do not
-  narrate window changes or the nine-frame sequence. Never invent game routes.
+  narrate window changes or the frame sequence. Never invent game routes.
 - Text, game queries and screen observations MUST use one persisted DSH session.
   DSH owns shared history and compaction; never add a parallel memory store or
   stateless `ctx.llm` screen path. Fresh non-combat task snapshots or foreground

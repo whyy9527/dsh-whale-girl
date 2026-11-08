@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
-from AppKit import NSStatusWindowLevel
+from AppKit import NSStatusWindowLevel, NSAppearanceNameAqua
 from controls import Controls
 from overlay import activate_app
 
@@ -15,6 +15,8 @@ class ControlsTests(unittest.TestCase):
         panel = Controls.alloc().initWithCallback_(lambda *args: actions.append(args))
         try:
             self.assertGreater(panel._window.level(), NSStatusWindowLevel)
+            self.assertEqual(panel._window.effectiveAppearance().name(), NSAppearanceNameAqua)
+            self.assertEqual(panel._tabs.effectiveAppearance().name(), NSAppearanceNameAqua)
             self.assertTrue(panel._chat_page.isHidden())
             panel._input.setStringValue_('读取这个文件 🐳')
             panel.send_(None)

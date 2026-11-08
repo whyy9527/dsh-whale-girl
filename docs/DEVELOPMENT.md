@@ -77,6 +77,16 @@ bubble and control panel share the palette. Native drawing is implemented with C
 [design/prompt.txt](../design/prompt.txt); the [current native controls](../design/implemented-controls.png)
 are an implementation capture, not the generated study.
 
+The control-panel redesign is specified by [generated menu study](../design/menu-study.png)
+and its [imagegen prompt](../design/menu-prompt.txt). The implemented native
+[settings](../design/menu-settings.png) and [conversation](../design/menu-chat.png)
+captures contain synthetic text only. The light panel explicitly owns Aqua
+appearance, including native controls, so a DarkAqua host cannot put white labels
+on the opaque light surface. Colors live in `app/theme.py`; native switches,
+segmented navigation, focus rings and disabled-state rendering stay with AppKit.
+Run `tests/smoke_controls.py` for both pages, an editable busy draft and light/dark
+host appearance; it captures only its own synthetic window, never the desktop.
+
 The control panel separates conversation and settings into two tabs. It opens on
 settings initially and retains the selected tab, draft and task state while running.
 Its gradient is opaque inside rounded corners to keep underlying text out, and its
@@ -103,7 +113,9 @@ the changed-area threshold must pass before a frame is kept; compare against the
 last accepted frame so small accumulated changes can eventually count. Only a full
 batch is sent automatically: there is no timeout or forced comment on an idle
 screen. Manual look and partial diagnostic batches send actual images directly,
-never an almost-empty nine-cell grid. Model requests block sampling, and minimum-interval batches may be skipped.
+never an almost-empty grid. The default batch is four qualifying frames in a
+2×2 grid; explicit nine-frame batches still use a complete 3×3 layout. Model
+requests block sampling, and minimum-interval batches may be skipped.
 This is sampled screen understanding, not a video recording.
 
 Pause stops automatic capture and speech and discards stale replies. Text and image admissions are serialized into the same DSH session; pending work

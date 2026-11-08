@@ -25,9 +25,9 @@ DEFAULTS = {
     "sampleIntervalSec": 2.0,
     "diffThreshold": 0.06,
     "minChangedRatio": 0.18,
-    "batchSize": 9,
+    "batchSize": 4,
     "minSendIntervalSec": 20,
-    "sendMode": "grid",  # grid = 拼成一张九宫格；frames = 九张原图分开发
+    "sendMode": "grid",  # grid = 拼成一张四宫格；frames = 原图分开发
     # 模型与参考音仅从仓库外固定路径读取。
     "tts": {
         "enabled": True,

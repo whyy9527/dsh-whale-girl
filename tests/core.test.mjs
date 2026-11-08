@@ -47,6 +47,13 @@ test('buildUserPrompt 认出九宫格拼图', () => {
   assert.ok(!text.includes('张截图'))
 })
 
+test('四宫格准确说明四帧而不描述不存在的格子', () => {
+  const text = buildUserPrompt({ count: 4, spanSec: 8, grid: true })
+  assert.match(text, /2x2 的四宫格/)
+  assert.match(text, /1 到 4/)
+  assert.ok(!text.includes('九宫格'))
+})
+
 test('parseModelOutput 吃标准 JSON', () => {
   const { say, mood } = parseModelOutput('{"say":"你这段代码在打折。","mood":"smug"}', 40)
   assert.equal(say, '你这段代码在打折。')

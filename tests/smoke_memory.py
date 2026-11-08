@@ -6,10 +6,14 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import tempfile
 import time
 import requests
 from PIL import Image, ImageDraw, ImageFont
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
+from frames import KeptFrame, stitch_grid
 
 GUIDE_TOOLS = {'mcp__wuxianwow__quests', 'mcp__wuxianwow__npcs', 'mcp__wuxianwow__atlas'}
 
@@ -43,9 +47,15 @@ def main():
         draw.rectangle((160, 100, 800, 450), fill=(190, 176, 147))
         font = ImageFont.truetype('/System/Library/Fonts/Supplemental/Arial Bold.ttf', 66)
         draw.text((210, 210), 'GATE ' + number, fill=(15, 24, 30), font=font)
-        path = Path(directory) / 'synthetic-gate.png'
-        image.save(path)
-        look, observed = ask(args.endpoint, '/look', {'sessionId': first['sessionId'], 'cwd': directory, 'frames': [{'data': base64.b64encode(path.read_bytes()).decode(), 'ts': '12:00:00'}], 'cellCount': 1, 'grid': False,
+        frames = []
+        for index in range(4):
+            frame = image.copy()
+            if index != 3:
+                label = ImageDraw.Draw(frame)
+                label.rectangle((160, 100, 800, 450), fill=(190, 176, 147))
+                label.text((210, 210), 'GATE ' + str(int(number) + index + 1), fill=(15, 24, 30), font=font)
+            frames.append(KeptFrame(frame, index * 2, f'12:00:0{index * 2}'))
+        look, observed = ask(args.endpoint, '/look', {'sessionId': first['sessionId'], 'cwd': directory, 'frames': [{'data': base64.b64encode(stitch_grid(frames)).decode(), 'ts': '12:00:06'}], 'cellCount': 4, 'grid': True,
             'game': {'version': 1, 'sampledAt': time.time(), 'zone': game_zone, 'selectedQuest': {'id': int(quest_id), 'title': 'Synthetic quest'}}})
         assert nickname.lower() in observed['text'].lower() and number in observed['text'], observed
         third, recalled = ask(args.endpoint, '/chat', {'sessionId': look['sessionId'], 'text': '我的角色代号是什么？刚才屏幕图里 GATE 后面的编号是什么？那次游戏快照的区域名和选中任务 ID 是什么（历史值，不是当前位置）？请将这四个值写入 memory-proof.txt，并在回复中给出。仅用文件写入工具，不要 shell，不改其他文件。'})

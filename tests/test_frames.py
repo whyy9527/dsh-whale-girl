@@ -58,6 +58,11 @@ class FrameTests(unittest.TestCase):
                 self.assertEqual(image.size, (64, 36))
         batch = [KeptFrame(Image.new('RGB', (64, 36), 'white'), i, '12:00:00') for i in range(9)]
         self.assertTrue(brain._payload(batch)['grid'])
+        payload = brain._payload(batch[:4])
+        self.assertTrue(payload['grid'])
+        self.assertEqual(payload['cellCount'], 4)
+        with Image.open(io.BytesIO(base64.b64decode(payload['frames'][0]['data']))) as image:
+            self.assertEqual(image.size, (1298, 738))
 
 
 if __name__ == '__main__':

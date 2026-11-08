@@ -1,17 +1,21 @@
-"""Separate conversation and settings pages in a readable native companion panel."""
+"""Readable native companion controls, implemented from design/menu-study.png."""
 import objc
 from objc import python_method
 from AppKit import (
-    NSApplication, NSBackingStoreBuffered, NSButton, NSColor, NSFont,
-    NSMakePoint, NSMakeRect, NSPanel, NSScreen, NSScrollView, NSSegmentedControl,
-    NSStatusWindowLevel, NSSwitch, NSTextField, NSImage, NSTextView, NSView,
+    NSApplication, NSAppearance, NSAppearanceNameAqua, NSBackingStoreBuffered,
+    NSBezierPath, NSButton, NSColor, NSControlSizeLarge, NSFont, NSFontAttributeName,
+    NSForegroundColorAttributeName, NSImage, NSImageView, NSImageLeft, NSImageRight, NSImageScaleProportionallyUpOrDown,
+    NSMakePoint, NSMakeRect, NSMakeSize, NSPanel, NSParagraphStyleAttributeName,
+    NSMutableParagraphStyle, NSScreen, NSScrollView, NSSegmentedControl,
+    NSStatusWindowLevel, NSSwitch, NSTextField, NSTextView, NSView,
     NSWindowStyleMaskBorderless, NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowCollectionBehaviorFullScreenAuxiliary,
 )
-from Foundation import NSObject
-from glass import GlassView
+from Foundation import NSObject, NSAttributedString, NSMutableAttributedString
+from glass import GlassView, color
+from theme import PANEL_INK, PANEL_MUTED, PANEL_ACCENT, PANEL_DIVIDER
 
-WIDTH, HEIGHT = 344, 404
+WIDTH, HEIGHT = 360, 488
 INSET = 20
 CONTENT_WIDTH = WIDTH - INSET * 2
 
@@ -32,6 +36,24 @@ class PageView(NSView):
         return True
 
 
+class ControlCard(PageView):
+    def drawRect_(self, _rect):
+        bounds = self.bounds()
+        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            NSMakeRect(.5, .5, bounds.size.width - 1, bounds.size.height - 1), 10, 10)
+        NSColor.whiteColor().setFill()
+        path.fill()
+        color(PANEL_DIVIDER).setStroke()
+        path.setLineWidth_(.7)
+        path.stroke()
+
+
+class ControlDivider(PageView):
+    def drawRect_(self, _rect):
+        color(PANEL_DIVIDER).setFill()
+        NSBezierPath.fillRect_(self.bounds())
+
+
 class Controls(NSObject):
     def initWithCallback_(self, callback):
         self = objc.super(Controls, self).init()
@@ -41,6 +63,9 @@ class Controls(NSObject):
         self._lines = []
         self._window = ControlWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, WIDTH, HEIGHT), NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False)
+        # The opaque light surface and every native descendant share one appearance.
+        # System DarkAqua must not put white labels on this light custom material.
+        self._window.setAppearance_(NSAppearance.appearanceNamed_(NSAppearanceNameAqua))
         self._window.setOpaque_(False)
         self._window.setBackgroundColor_(NSColor.clearColor())
         self._window.setHasShadow_(True)
@@ -51,14 +76,26 @@ class Controls(NSObject):
         self._view = GlassView.alloc().initWithFrame_(NSMakeRect(0, 0, WIDTH, HEIGHT))
         self._window.setContentView_(self._view)
 
-        title = self._label('鲸鱼娘', INSET, 15, 240, 24, 16)
-        title.setFont_(NSFont.boldSystemFontOfSize_(16))
-        self._status = self._label('就绪', INSET, 42, CONTENT_WIDTH, 16, 11, muted=True)
-        close = self._button('', WIDTH - INSET - 24, 14, 24, 26, b'close:')
-        close.setBordered_(False)
-        close.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('xmark', '关闭面板'))
-        self._tabs = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(INSET - 2, 68, CONTENT_WIDTH + 4, 28))
+        mark = NSImageView.alloc().initWithFrame_(NSMakeRect(INSET, 24, 28, 28))
+        mark.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('water.waves', None))
+        mark.setContentTintColor_(color(PANEL_ACCENT))
+        mark.setImageScaling_(NSImageScaleProportionallyUpOrDown)
+        mark.setAccessibilityElement_(False)
+        self._view.addSubview_(mark)
+        title = self._label('鲸鱼娘', 60, 17, 220, 25, 17)
+        title.setFont_(NSFont.systemFontOfSize_weight_(17, .5))
+        self._status = self._label('就绪', 60, 43, 240, 17, 11.5, muted=True)
+        self._close = self._button('', WIDTH - INSET - 28, 17, 28, 28, b'close:', plain=True)
+        self._close.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('xmark', '关闭面板'))
+        self._close.setAccessibilityLabel_('关闭面板')
+        self._close.setToolTip_('关闭面板 · Esc')
+
+        self._tabs = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(INSET - 2, 72, CONTENT_WIDTH + 4, 32))
         self._tabs.setSegmentCount_(2)
+        self._tabs.setControlSize_(NSControlSizeLarge)
+        self._tabs.setFont_(NSFont.systemFontOfSize_weight_(14, .35))
+        self._tabs.setSelectedSegmentBezelColor_(color(PANEL_ACCENT))
+        self._tabs.setAccessibilityLabel_('面板页面')
         for index, label in enumerate(('对话', '设置')):
             self._tabs.setLabel_forSegment_(label, index)
             self._tabs.setWidth_forSegment_(CONTENT_WIDTH / 2, index)
@@ -66,98 +103,140 @@ class Controls(NSObject):
         self._tabs.setAction_(b'tabChanged:')
         self._view.addSubview_(self._tabs)
 
-        self._chat_page = PageView.alloc().initWithFrame_(NSMakeRect(INSET, 108, CONTENT_WIDTH, 230))
-        self._settings_page = PageView.alloc().initWithFrame_(NSMakeRect(INSET, 108, CONTENT_WIDTH, 230))
+        self._chat_page = PageView.alloc().initWithFrame_(NSMakeRect(INSET, 118, CONTENT_WIDTH, 316))
+        self._settings_page = PageView.alloc().initWithFrame_(NSMakeRect(INSET, 118, CONTENT_WIDTH, 316))
         self._view.addSubview_(self._chat_page)
         self._view.addSubview_(self._settings_page)
 
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, CONTENT_WIDTH, 188))
+        self._card(self._chat_page, 0, 254)
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(12, 12, CONTENT_WIDTH - 24, 230))
         scroll.setBorderType_(0)
         scroll.setDrawsBackground_(False)
         scroll.setHasVerticalScroller_(True)
-        self._transcript = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, CONTENT_WIDTH - 15, 188))
+        scroll.setAutohidesScrollers_(True)
+        self._transcript = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, CONTENT_WIDTH - 39, 230))
         self._transcript.setEditable_(False)
         self._transcript.setDrawsBackground_(False)
-        self._transcript.setFont_(NSFont.systemFontOfSize_(12.5))
-        self._transcript.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(.16, .23, .31, 1))
-        self._transcript.setString_('发送消息，交给 DSH 处理。')
+        self._transcript.setFont_(NSFont.systemFontOfSize_(14))
+        self._transcript.setTextColor_(color(PANEL_INK))
+        self._transcript.setTextContainerInset_(NSMakeSize(0, 0))
+        self._transcript.setString_('输入消息，开始对话。')
         self._transcript.setVerticallyResizable_(True)
         self._transcript.setHorizontallyResizable_(False)
         self._transcript.textContainer().setWidthTracksTextView_(True)
+        self._transcript.setAccessibilityLabel_('对话记录')
         scroll.setDocumentView_(self._transcript)
         self._chat_page.addSubview_(scroll)
 
-        self._input = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 202, CONTENT_WIDTH - 66, 26))
+        self._input = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 280, CONTENT_WIDTH - 68, 30))
         self._input.setStringValue_('')
-        self._input.setPlaceholderString_('输入消息…')
         self._input.setFont_(NSFont.systemFontOfSize_(13))
+        self._input.setTextColor_(color(PANEL_INK))
+        self._input.setBackgroundColor_(NSColor.whiteColor())
+        self._input.setPlaceholderAttributedString_(NSAttributedString.alloc().initWithString_attributes_(
+            '输入消息…', {NSForegroundColorAttributeName: color(PANEL_MUTED), NSFontAttributeName: NSFont.systemFontOfSize_(13)}))
         self._input.setBezelStyle_(1)
-        self._input.setFocusRingType_(1)
+        self._input.setAccessibilityLabel_('消息')
         self._input.setTarget_(self)
         self._input.setAction_(b'send:')
         self._chat_page.addSubview_(self._input)
-        self._send = self._button('发送', CONTENT_WIDTH - 56, 199, 56, 30, b'send:', parent=self._chat_page)
-        self._send.setBezelColor_(NSColor.systemBlueColor())
+        self._send = self._button('发送', CONTENT_WIDTH - 60, 276, 60, 36, b'send:', parent=self._chat_page)
+        self._send.setBezelColor_(color(PANEL_ACCENT))
         self._send.setContentTintColor_(NSColor.whiteColor())
 
-        self._watch = self._switch('陪看屏幕', '自动观察屏幕并回应', 0, b'watchChanged:')
-        self._voice = self._switch('朗读回复', '使用当前音色说话', 46, b'voiceChanged:')
-        self._label('角色形象', 0, 94, 120, 20, parent=self._settings_page)
-        self._label('头像或完整姿态', 0, 115, 150, 16, 11, muted=True, parent=self._settings_page)
-        self._mode = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(156, 99, 148, 28))
+        self._section('陪伴', 0)
+        self._card(self._settings_page, 24, 96)
+        self._watch = self._switch('陪看屏幕', '有新线索时轻声提醒', 24, b'watchChanged:')
+        self._separator(self._settings_page, 12, 72, CONTENT_WIDTH - 24)
+        self._voice = self._switch('朗读回复', '使用当前音色', 72, b'voiceChanged:')
+        self._section('外观与启动', 136)
+        self._card(self._settings_page, 160, 108)
+        self._label('角色形象', 12, 168, 140, 20, parent=self._settings_page)
+        self._mode = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(CONTENT_WIDTH - 152, 164, 140, 28))
         self._mode.setSegmentCount_(2)
         self._mode.setLabel_forSegment_('头像', 0)
         self._mode.setLabel_forSegment_('全身', 1)
+        self._mode.setFont_(NSFont.systemFontOfSize_(13))
+        self._mode.setSelectedSegmentBezelColor_(color(PANEL_ACCENT))
+        self._mode.setAccessibilityLabel_('角色形象')
         self._mode.setTarget_(self)
         self._mode.setAction_(b'modeChanged:')
         self._settings_page.addSubview_(self._mode)
-        self._autostart = self._switch('登录时启动', '同时启动 DSH 与桌宠', 138, b'autostartChanged:')
-        self._button('打开角色素材', -4, 199, 146, 30, b'assets:', parent=self._settings_page)
-        self._button('现在看一眼', 164, 199, 144, 30, b'look:', parent=self._settings_page)
-        self._line(350)
-        self._button('DSH 工作台', INSET - 4, 363, 112, 28, b'workbench:')
-        self._button('退出桌宠', WIDTH - INSET - 84, 363, 88, 28, b'quit:')
+        self._separator(self._settings_page, 12, 196, CONTENT_WIDTH - 24)
+        self._autostart = self._switch('登录时启动', '登录 Mac 时打开鲸鱼娘', 196, b'autostartChanged:')
+        self._separator(self._settings_page, 12, 240, CONTENT_WIDTH - 24)
+        self._label('角色素材', 12, 246, 140, 18, 12.5, parent=self._settings_page)
+        assets = self._button('打开文件夹', CONTENT_WIDTH - 126, 240, 116, 28, b'assets:', parent=self._settings_page, plain=True)
+        assets.setFont_(NSFont.systemFontOfSize_(11.5))
+        assets.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('chevron.right', None))
+        assets.setImagePosition_(NSImageRight)
+        assets.setAccessibilityLabel_('打开当前形象的素材文件夹')
+        self._look = self._button('现在看一眼', 0, 280, CONTENT_WIDTH, 36, b'look:', parent=self._settings_page)
+        self._look.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('viewfinder', None))
+        self._look.setImagePosition_(NSImageLeft)
+
+        self._separator(self._view, INSET, 444, CONTENT_WIDTH)
+        self._workbench = self._button('工作台', INSET - 6, 452, 100, 26, b'workbench:', plain=True)
+        self._workbench.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('arrow.up.forward.square', None))
+        self._workbench.setImagePosition_(NSImageLeft)
+        self._workbench.setAccessibilityLabel_('打开 DSH 工作台')
+        self._quit = self._button('退出', WIDTH - INSET - 50, 452, 56, 26, b'quit:', plain=True)
+        self._quit.setToolTip_('退出鲸鱼娘')
         self._select_page(1)
         return self
 
     @python_method
-    def _label(self, text, x, y, width, height, size=13, muted=False, parent=None):
+    def _label(self, text, x, y, width, height, size=14, muted=False, parent=None):
         label = NSTextField.labelWithString_(text)
         label.setFrame_(NSMakeRect(x, y, width, height))
         label.setFont_(NSFont.systemFontOfSize_(size))
-        rgb = (.40, .48, .55) if muted else (.16, .23, .31)
-        label.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(*rgb, 1))
+        label.setTextColor_(color(PANEL_MUTED if muted else PANEL_INK))
         (parent if parent is not None else self._view).addSubview_(label)
         return label
 
     @python_method
-    def _button(self, title, x, y, width, height, selector, parent=None):
+    def _button(self, title, x, y, width, height, selector, parent=None, plain=False):
         button = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, width, height))
         button.setTitle_(title)
         button.setBezelStyle_(1)
+        button.setFont_(NSFont.systemFontOfSize_(13))
+        button.setImageHugsTitle_(True)
+        button.setContentTintColor_(color(PANEL_INK))
+        if plain:
+            button.setBordered_(False)
+        else:
+            button.setControlSize_(NSControlSizeLarge)
         button.setTarget_(self)
         button.setAction_(selector)
         (parent if parent is not None else self._view).addSubview_(button)
         return button
 
     @python_method
-    def _switch(self, title, detail, y, selector):
-        self._label(title, 0, y + 2, 220, 20, parent=self._settings_page)
-        self._label(detail, 0, y + 23, 240, 16, 11, muted=True, parent=self._settings_page)
-        switch = NSSwitch.alloc().initWithFrame_(NSMakeRect(CONTENT_WIDTH - 44, y + 7, 44, 28))
-        switch.setTarget_(self)
-        switch.setAction_(selector)
-        self._settings_page.addSubview_(switch)
-        return switch
+    def _section(self, text, y):
+        label = self._label(text, 2, y, CONTENT_WIDTH, 18, 11.5, muted=True, parent=self._settings_page)
+        label.setFont_(NSFont.systemFontOfSize_weight_(11.5, .35))
 
     @python_method
-    def _line(self, y):
-        line = NSTextField.alloc().initWithFrame_(NSMakeRect(INSET, y, CONTENT_WIDTH, 1))
-        line.setEditable_(False)
-        line.setBezeled_(False)
-        line.setDrawsBackground_(True)
-        line.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(.62, .73, .83, .38))
-        self._view.addSubview_(line)
+    def _card(self, parent, y, height):
+        card = ControlCard.alloc().initWithFrame_(NSMakeRect(0, y, CONTENT_WIDTH, height))
+        parent.addSubview_(card)
+
+    @python_method
+    def _separator(self, parent, x, y, width):
+        line = ControlDivider.alloc().initWithFrame_(NSMakeRect(x, y, width, .7))
+        parent.addSubview_(line)
+
+    @python_method
+    def _switch(self, title, detail, y, selector):
+        self._label(title, 12, y + 5, 226, 20, parent=self._settings_page)
+        self._label(detail, 12, y + 26, 240, 16, 12, muted=True, parent=self._settings_page)
+        switch = NSSwitch.alloc().initWithFrame_(NSMakeRect(CONTENT_WIDTH - 54, y + 10, 44, 28))
+        switch.setTarget_(self)
+        switch.setAction_(selector)
+        switch.setAccessibilityLabel_(title)
+        switch.setAccessibilityHelp_(detail)
+        self._settings_page.addSubview_(switch)
+        return switch
 
     @python_method
     def _select_page(self, index):
@@ -168,7 +247,7 @@ class Controls(NSObject):
         if index == 0 and self._input.isEnabled():
             self._window.makeFirstResponder_(self._input)
         else:
-            self._window.makeFirstResponder_(self._tabs)
+            self._window.makeFirstResponder_(None)
 
     @python_method
     def _configure(self, watch=True, voice=True, mode='portrait', autostart=False):
@@ -196,16 +275,33 @@ class Controls(NSObject):
 
     @python_method
     def _append(self, name, text):
-        self._lines.append(f'{name}：{text}')
-        self._transcript.setString_('\n\n'.join(self._lines[-12:]))
-        # AppKit ranges use UTF-16 code units, including supplementary emoji.
-        length = len(str(self._transcript.string()).encode('utf-16-le')) // 2
-        self._transcript.scrollRangeToVisible_((length, 0))
+        self._lines.append(f'{"鲸鱼娘" if name == "DSH" else name}：{text}')
+        self._render_transcript()
 
     @python_method
     def _restore_history(self, entries):
-        self._lines = [f"{item['name']}：{item['text']}" for item in entries]
-        self._transcript.setString_('\n\n'.join(self._lines[-12:]))
+        self._lines = [f"{'鲸鱼娘' if item['name'] == 'DSH' else item['name']}：{item['text']}" for item in entries]
+        self._render_transcript()
+
+    @python_method
+    def _render_transcript(self):
+        lines = self._lines[-12:]
+        content = '\n\n'.join(lines)
+        paragraph = NSMutableParagraphStyle.alloc().init()
+        paragraph.setLineSpacing_(4)
+        rich = NSMutableAttributedString.alloc().initWithString_attributes_(content, {
+            NSFontAttributeName: NSFont.systemFontOfSize_(14),
+            NSForegroundColorAttributeName: color(PANEL_INK),
+            NSParagraphStyleAttributeName: paragraph,
+        })
+        offset = 0
+        for line in lines:
+            sender = line.partition('：')[0] + '：'
+            units = len(sender.encode('utf-16-le')) // 2
+            rich.addAttributes_range_({NSFontAttributeName: NSFont.systemFontOfSize_weight_(12, .45),
+                NSForegroundColorAttributeName: color(PANEL_ACCENT)}, (offset, units))
+            offset += len((line + '\n\n').encode('utf-16-le')) // 2
+        self._transcript.textStorage().setAttributedString_(rich)
         length = len(str(self._transcript.string()).encode('utf-16-le')) // 2
         self._transcript.scrollRangeToVisible_((length, 0))
 

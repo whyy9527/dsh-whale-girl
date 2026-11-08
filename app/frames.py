@@ -58,8 +58,10 @@ class KeptFrame:
 
 
 def stitch_grid(frames: list[KeptFrame]) -> bytes:
-    """把 1-9 张按时间顺序拼成一张 3x3 的图，每格左上角标序号和时间。"""
-    cols, rows = 3, 3
+    """完整批次按时间排列为 2×2 或 3×3；不创建空白格。"""
+    if len(frames) not in (4, 9):
+        raise ValueError('拼图需要完整的 4 张或 9 张画面')
+    cols = rows = 2 if len(frames) == 4 else 3
     cell_w, cell_h = CELL_SIZE
     width = cols * cell_w + (cols + 1) * GRID_GAP
     height = rows * cell_h + (rows + 1) * GRID_GAP
@@ -115,7 +117,7 @@ class FramePicker:
 
     threshold: float = 0.06
     min_changed_ratio: float = 0.18
-    batch_size: int = 9
+    batch_size: int = 4
     kept: list[KeptFrame] = field(default_factory=list)
     baseline: np.ndarray | None = None
 
