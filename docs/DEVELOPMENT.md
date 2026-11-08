@@ -76,7 +76,11 @@ bubble and control panel share the palette. Native drawing is implemented with C
 [design/prompt.txt](../design/prompt.txt); the [current native controls](../design/implemented-controls.png)
 are an implementation capture, not the generated study.
 
-The control panel owns input, reply history, watch/voice switches, display mode,
+The control panel separates conversation and settings into two tabs. It opens on
+settings initially and retains the selected tab, draft and task state while running.
+Its gradient is opaque inside rounded corners to keep underlying text out, and its
+window level stays above the character/bubble window even when a comment refreshes.
+The panel owns input, reply history, watch/voice switches, display mode,
 login startup, active asset folder and DSH workbench actions. The macOS status
 item and avatar both open the same panel. Input is nonblocking; task execution
 continues in DSH if the desktop window exits. Approvals stay in the DSH UI.
