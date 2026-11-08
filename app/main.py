@@ -67,7 +67,8 @@ class Brain(threading.Thread):
         self.stop_event = threading.Event()
         self.force_look = threading.Event()
         self.paused = not cfg.get("watchEnabled", True)
-        self.chat_active = False
+        self.request_active = False
+        self.submit_screen = None
         self.pause_generation = 0
         self.last_sent_at = 0.0
         self.permission_warned = False
@@ -82,7 +83,7 @@ class Brain(threading.Thread):
                 if self._seen_pause_generation != self.pause_generation:
                     self.picker.reset()
                     self._seen_pause_generation = self.pause_generation
-                if self.chat_active:
+                if self.request_active:
                     self.stop_event.wait(0.3)
                     continue
                 if self.paused and not self.force_look.is_set():
@@ -95,10 +96,10 @@ class Brain(threading.Thread):
                         image = grab() if not self.demo else self._demo_frame()
                         self._send([KeptFrame(image=image, taken_at=time.monotonic(), stamp=now_stamp())], force=True)
                         self.picker.reset()
-                    finally:
+                    except Exception:
                         if self.once:
-                            # Queue completion after the main-thread comment/speech callback.
-                            AppHelper.callAfter(self.attempt_done.set)
+                            self.attempt_done.set()
+                        raise
                     if self.once:
                         return
                 else:
@@ -155,54 +156,21 @@ class Brain(threading.Thread):
         return {"frames": frames, "spanSec": span, "grid": use_grid, "cellCount": len(batch)}
 
     def _send(self, batch, force: bool = False) -> None:
-        import requests
-
         if not force and time.monotonic() - self.last_sent_at < float(self.cfg.get("minSendIntervalSec", 20)):
             return
         if not batch:
-            if force:
-                AppHelper.callAfter(self.overlay._show_comment, "还没攒到画面变化，等一会儿再说。", "bored")
+            if self.once:
+                self.attempt_done.set()
             return
-
-        generation = self.pause_generation
-        payload = self._payload(batch)
+        if self.stop_event.is_set() or self.request_active:
+            return
         self.last_sent_at = time.monotonic()
-        endpoint = str(self.cfg.get("endpoint", "http://127.0.0.1:8791")).rstrip("/")
+        payload = self._payload(batch)
+        payload['manual'] = force
+        AppHelper.callAfter(self.submit_screen, payload, self.pause_generation)
 
-        try:
-            response = requests.post(f"{endpoint}/look", json=payload, timeout=90)
-            data = response.json()
-        except Exception as error:
-            self.log(f"[send] {error}")
-            if force:
-                AppHelper.callAfter(
-                    self.overlay._show_comment,
-                    "连不上 DSH 插件，去确认 `dsh web` 开着、插件设置里端口是 8791。",
-                    "shock",
-                )
-            return
-
-        if response.status_code == 409:
-            self.log("[send] 上一轮还没看完，跳过")
-            return
-        if not data.get("ok"):
-            message = str(data.get("error", "未知错误"))
-            self.log(f"[send] 插件报错: {message}")
-            if force:
-                AppHelper.callAfter(self.overlay._show_comment, f"翻车了：{message[:60]}", "shock")
-            return
-
-        if self.stop_event.is_set() or self.chat_active or generation != self.pause_generation:
-            return
-        say = str(data.get("say", "")).strip()
-        if not say:
-            return
-        mood = str(data.get("mood", "idle"))
-        self.log(f"[say] {say}  ({mood}, {data.get('ms')}ms, {len(batch)} 帧)")
-        AppHelper.callAfter(self._deliver_comment, say, mood, generation)
-
-    def _deliver_comment(self, say, mood, generation):
-        if self.stop_event.is_set() or self.chat_active or generation != self.pause_generation:
+    def _deliver_comment(self, say, mood, generation, manual=False):
+        if self.stop_event.is_set() or self.request_active or generation != self.pause_generation or (self.paused and not manual):
             return
         self.overlay._show_comment(say, mood)
         self.speaker.speak_async(say)
@@ -404,35 +372,80 @@ def main() -> int:
         overlay._controls._configure(watch=not brain.paused, voice=speaker.enabled,
             mode=cfg['avatar']['mode'], autostart=autostart.enabled())
 
+    screen_generation = brain.pause_generation
+    active_kind = 'text'
+    active_manual = False
+
+    def show_busy(status, busy=True):
+        overlay._controls._set_busy(busy, status, allow_draft=active_kind == 'look')
+
     def chat_event(kind, data):
+        nonlocal active_kind, active_manual
         if cleaned:
             return
         if kind == 'accepted':
+            active_kind = data['kind']
+            active_manual = data.get('manual', False)
             cfg['chat']['sessionId'] = data['sessionId']
-            cfg['chat']['pending'] = {key: data[key] for key in ('sessionId', 'requestId')}
+            cfg['chat']['pending'] = {key: data[key] for key in ('sessionId', 'requestId', 'kind')}
+            if active_kind == 'look':
+                cfg['chat']['pending']['manual'] = active_manual
             config_module.save(cfg)
+        elif kind in ('history', 'history_error'):
+            if kind == 'history':
+                overlay._controls._restore_history(data['entries'])
+            pending = cfg['chat']['pending']
+            show_busy('恢复任务状态…' if pending else ('已恢复对话' if kind == 'history' else '历史暂未加载，可在 DSH 工作台查看。'), bool(pending))
+            if not pending:
+                brain.request_active = False
         elif kind == 'state':
+            active_kind = data.get('kind', 'text')
             status = data['status']
-            labels = {'queued': '消息已排队', 'running': 'DSH 正在处理…',
-                'approval': '需要确认，请打开 DSH 工作台。', 'complete': '已回复', 'failed': '任务未完成'}
-            overlay._controls._set_busy(status not in ('complete', 'failed'), labels[status])
+            labels = {'queued': '消息已排队', 'running': '正在观察屏幕…' if active_kind == 'look' else 'DSH 正在处理…',
+                'approval': '需要确认，请打开 DSH 工作台。', 'complete': '就绪', 'failed': '任务未完成'}
+            show_busy(labels[status], status not in ('complete', 'failed'))
             if status in ('complete', 'failed'):
-                text = data.get('text') or data.get('error') or '任务已结束。'
-                overlay._controls._append('DSH', text)
-                overlay._show_comment(text[:180], 'idle')
-                speaker.speak_async(text)
+                brain.request_active = False
+                text = data.get('text', '')
+                if status == 'failed':
+                    overlay._controls._append('连接', data.get('error') or '任务未完成')
+                elif active_kind == 'look':
+                    if text and screen_generation == brain.pause_generation and (not brain.paused or active_manual):
+                        overlay._controls._append('看屏', text)
+                        brain._deliver_comment(text, data.get('mood', 'idle'), screen_generation, active_manual)
+                else:
+                    if text:
+                        overlay._controls._append('DSH', text)
+                        overlay._show_comment(text[:180], 'idle')
+                        speaker.speak_async(text)
+                    brain.pause_generation += 1
                 cfg['chat']['pending'] = None
                 config_module.save(cfg)
-                brain.chat_active = False
-                brain.pause_generation += 1
+                if brain.once and active_kind == 'look':
+                    brain.attempt_done.set()
         elif kind == 'connection':
-            overlay._controls._set_busy(True, data['error'])
+            show_busy(data['error'])
         elif kind == 'error':
             overlay._controls._append('连接', data['error'])
-            overlay._controls._set_busy(False, '连接失败；可在 DSH 工作台确认任务。')
-            brain.chat_active = False
+            show_busy('连接失败；可在 DSH 工作台确认任务。', False)
+            brain.request_active = False
+            if brain.once:
+                brain.attempt_done.set()
 
     conversation = Conversation(cfg['endpoint'], lambda kind, data: AppHelper.callAfter(chat_event, kind, data))
+
+    def accept_screen(payload, generation):
+        nonlocal screen_generation, active_kind
+        if cleaned or generation != brain.pause_generation or conversation.busy:
+            if brain.once:
+                brain.attempt_done.set()
+            return
+        screen_generation = generation
+        if conversation.look(payload, cfg['chat']['sessionId'], cfg['chat']['workspacePath']):
+            active_kind = 'look'
+            brain.request_active = True
+            show_busy('正在交给 DSH 观察…')
+    brain.submit_screen = accept_screen
 
     def open_workbench():
         def resolve():
@@ -447,11 +460,13 @@ def main() -> int:
         threading.Thread(target=resolve, daemon=True).start()
 
     def on_menu(action, value):
+        nonlocal active_kind
         if action == 'look':
             brain.request_look()
         elif action == 'send':
             if conversation.send(value, cfg['chat']['sessionId'], cfg['chat']['workspacePath']):
-                brain.chat_active = True
+                active_kind = 'text'
+                brain.request_active = True
                 brain.pause_generation += 1
                 speaker.stop()
                 overlay._controls._append('你', value)
@@ -498,10 +513,12 @@ def main() -> int:
         update_controls()
 
     update_controls()
-    if cfg['chat']['pending']:
-        brain.chat_active = True
-        conversation.resume(cfg['chat']['pending'])
-        overlay._controls._set_busy(True, '恢复 DSH 任务状态…')
+    if cfg['chat']['sessionId']:
+        brain.request_active = True
+        active_kind = (cfg['chat']['pending'] or {}).get('kind', 'text')
+        active_manual = (cfg['chat']['pending'] or {}).get('manual', False)
+        show_busy('读取对话历史…')
+        conversation.restore(cfg['chat']['sessionId'], cfg['chat']['pending'])
 
     overlay._set_callback(on_menu)
     if args.once:
@@ -515,7 +532,7 @@ def main() -> int:
                     return
         threading.Thread(target=finish_once, daemon=True).start()
     else:
-        overlay._show_comment("鲸鱼娘上线了，盯着你呢。", "happy")
+        overlay._show_comment("我在这儿，有需要就叫我。", "happy")
 
     brain.start()
     AppHelper.runEventLoop()

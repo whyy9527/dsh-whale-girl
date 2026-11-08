@@ -83,8 +83,9 @@ Its gradient is opaque inside rounded corners to keep underlying text out, and i
 window level stays above the character/bubble window even when a comment refreshes.
 The panel owns input, reply history, watch/voice switches, display mode,
 login startup, active asset folder and DSH workbench actions. The macOS status
-item and avatar both open the same panel. Input is nonblocking; task execution
-continues in DSH if the desktop window exits. Approvals stay in the DSH UI.
+item and avatar both open the same panel. Text and screen observations share one DSH session and restore readable recent
+history on launch. Input transport is nonblocking; task execution continues in DSH
+if the desktop window exits. Approvals stay in the DSH UI.
 
 ## Permissions, sampling and process lifecycle
 
@@ -105,16 +106,16 @@ screen. Manual look and partial diagnostic batches send actual images directly,
 never an almost-empty nine-cell grid. Model requests block sampling, and minimum-interval batches may be skipped.
 This is sampled screen understanding, not a video recording.
 
-Pause stops automatic capture and speech and discards stale replies. Explicit
-text runs separately through the DSH session and suspends automatic commentary
-while it is pending. Speech has one consumer and replaces pending old text.
+Pause stops automatic capture and speech and discards stale replies. Text and image admissions are serialized into the same DSH session; pending work
+suspends further sampling. The native session owns shared history and automatic
+compaction; automatic observations cannot execute tools. Speech has one consumer and replaces pending old text.
 Termination cleanup belongs to `applicationWillTerminate:` because AppKit can
 exit without returning from `runEventLoop`; the repeating Python timer lets
 SIGTERM be handled while Cocoa idles. Stop the worker before joining its thread.
 
 ## Diagnostics
 
-`GET /health` on the configured plugin endpoint reports its model and DSH
+`GET /health` on the configured plugin endpoint reports shared-session ownership and the DSH
 workbench URL. Runtime logs/cache and the instance lock live below the user
 configuration directory. Never print full configuration or resolved keys.
 

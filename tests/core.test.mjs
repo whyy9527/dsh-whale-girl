@@ -19,13 +19,11 @@ const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(
 test('resolveConfig 补默认值并校验', () => {
   const config = resolveConfig({ port: 9000 })
   assert.equal(config.port, 9000)
-  assert.equal(config.model, 'deepseek-flash')
+  assert.equal(config.maxChars, 42)
   assert.ok(config.persona.includes('DeepSeek'))
 
   assert.throws(() => resolveConfig({ port: 0 }), /port/)
   assert.throws(() => resolveConfig({ maxChars: 1 }), /maxChars/)
-  assert.throws(() => resolveConfig({ model: '' }), /model/)
-  assert.throws(() => resolveConfig({ temperature: 5 }), /temperature/)
 })
 
 test('buildSystemPrompt 带上字数上限和 mood 枚举', () => {

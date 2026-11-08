@@ -3,38 +3,27 @@ import { after, before, test } from 'node:test'
 import { apply } from '../lib/host.js'
 
 /** 最小的 cordis 上下文替身：只实现插件用到的那几个口子。 */
-function fakeCtx(records, reply = '{"say":"你盯着这行报错看了四分钟。","mood":"smug"}') {
+function fakeCtx(records) {
   const effects = []
-  const saved = []
+  const sessions = new Map()
   return {
-    effects,
-    saved,
-    logger: { info() {}, warn() {} },
-    effect(fn) {
-      effects.push(fn())
-    },
-    attachments: {
-      async saveImages(inputs) {
-        saved.push(...inputs)
-        return inputs.map((input, index) => ({
-          attachmentId: `sha256:${String(index).padStart(64, '0')}`,
-          mediaType: input.mediaType,
-          bytes: input.data.byteLength,
-          width: 100,
-          height: 100,
-        }))
+    effects, logger: { info() {}, warn() {} },
+    on() {}, tools: { guard() { return () => {} } },
+    effect(fn) { effects.push(fn()) },
+    sessionController: {
+      async create() { return { sessionId: 'shared-session' } },
+      async prompt(request) {
+        records.push(request)
+        const events = sessions.get(request.sessionId) ?? []
+        const turn = records.length
+        const look = request.requestId.startsWith('whale-look:')
+        events.push({ type: 'turn/start', data: { turn } },
+          { type: 'user/message', data: { source: { rpcId: request.requestId }, content: request.content } },
+          { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: look ? '{"say":"城门到了。","mood":"happy"}' : '记住了。' }] } } },
+          { type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })
+        sessions.set(request.sessionId, events)
       },
-    },
-    llm: {
-      stream(options) {
-        records.push(options)
-        return (async function* () {
-          yield { type: 'block-start', index: 0, blockType: 'text' }
-          yield { type: 'text-delta', index: 0, text: reply }
-          yield { type: 'usage', usage: { inputTokens: 1200, outputTokens: 30 } }
-          yield { type: 'finish', reason: { kind: 'stop' } }
-        })()
-      },
+      async inspect(id) { return { events: sessions.get(id) ?? [] } },
     },
   }
 }
@@ -61,36 +50,29 @@ after(() => {
   for (const dispose of globalThis.__ctx.effects) dispose()
 })
 
-test('GET /health 报出模型与状态', async () => {
+test('GET /health reports shared session ownership', async () => {
   const response = await fetch(`${base}/health`)
   const body = await response.json()
   assert.equal(response.status, 200)
   assert.equal(body.ok, true)
-  assert.equal(body.model, 'deepseek-official/deepseek-flash')
-  assert.equal(body.busy, false)
+  assert.equal(body.sharedSession, true)
 })
 
-test('POST /look 走通模型调用并解析出评论', async () => {
-  const response = await fetch(`${base}/look`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      frames: [{ data: PNG.toString('base64'), ts: '10:00:01' }],
-      spanSec: 12,
-    }),
-  })
-  const body = await response.json()
-  assert.equal(response.status, 200, JSON.stringify(body))
-  assert.equal(body.say, '你盯着这行报错看了四分钟。')
-  assert.equal(body.mood, 'smug')
-  assert.equal(body.frames, 1)
-
+test('POST /look queues a native image turn in the same session as text', async () => {
+  const post = (path, body) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const text = await (await post('/chat', { text: '我是法师', sessionId: 'chosen' })).json()
+  const response = await post('/look', { sessionId: text.sessionId, frames: [{ data: PNG.toString('base64'), ts: '10:00:01' }], spanSec: 12 })
+  const receipt = await response.json()
+  assert.equal(response.status, 202)
+  assert.equal(receipt.sessionId, text.sessionId)
+  assert.equal(receipt.kind, 'look')
   const call = globalThis.__records.at(-1)
-  assert.equal(call.provider, 'deepseek-official')
-  assert.equal(call.model, 'deepseek-flash')
-  assert.equal(call.messages[0].content[0].type, 'image')
-  assert.equal(call.messages[0].content.at(-1).type, 'text')
-  assert.ok(call.system.includes('DeepSeek'))
+  assert.equal(call.content[1].type, 'image')
+  const state = await (await fetch(`${base}/chat?sessionId=${receipt.sessionId}&requestId=${receipt.requestId}`)).json()
+  assert.equal(state.text, '城门到了。')
+  const history = await (await fetch(`${base}/history?sessionId=chosen`)).json()
+  assert.deepEqual(history.entries.map(e => e.name), ['你', 'DSH', '看屏'])
+  assert.equal(history.entries[0].text, '我是法师')
 })
 
 test('POST /look dryRun 只回提示词，不碰模型', async () => {
@@ -121,13 +103,6 @@ test('POST /look 拒绝坏输入', async () => {
     body: '{not json',
   })
   assert.equal(broken.status, 400)
-})
-
-test('GET /log 记下刚才那几句', async () => {
-  const response = await fetch(`${base}/log`)
-  const body = await response.json()
-  assert.ok(body.entries.length >= 1)
-  assert.equal(body.entries[0].say, '你盯着这行报错看了四分钟。')
 })
 
 test('autostartOverlay 在监听成功后启动可执行文件', async () => {
@@ -178,19 +153,9 @@ test('browser origins cannot submit tool-enabled user text', async () => {
 })
 
 
-test('POST /look accepts deliberate silence as a successful result', async () => {
-  const previous = globalThis.__ctx.llm
-  globalThis.__ctx.llm = fakeCtx([], '{"say":"","mood":"idle"}').llm
-  try {
-    const response = await fetch(`${base}/look`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ frames: [{ data: PNG.toString('base64') }] }),
-    })
-    assert.equal(response.status, 200)
-    const body = await response.json()
-    assert.equal(body.ok, true)
-    assert.equal(body.say, '')
-  } finally {
-    globalThis.__ctx.llm = previous
+test('browser origins cannot submit observations or read shared history', async () => {
+  for (const path of ['/look', '/history?sessionId=chosen']) {
+    const response = await fetch(base + path, { method: path === '/look' ? 'POST' : 'GET', headers: { origin: 'https://example.com', 'content-type': 'application/json' }, ...(path === '/look' ? { body: '{}' } : {}) })
+    assert.equal(response.status, 403)
   }
 })

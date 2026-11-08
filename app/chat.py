@@ -1,4 +1,4 @@
-"""Nonblocking explicit input client; DSH owns tools, history and approvals."""
+"""One serialized transport for text and observations; DSH owns all conversation memory."""
 import threading
 import requests
 
@@ -10,29 +10,60 @@ class Conversation:
         self.stop_event = threading.Event()
         self.busy = False
 
-    def send(self, text, session_id='', cwd=None):
+    def _start(self, path, payload):
         if self.busy:
             return False
         self.busy = True
-        threading.Thread(target=self._run, args=(text, session_id, cwd, None), daemon=True, name='whale-chat').start()
+        threading.Thread(target=self._run, args=(path, payload, None), daemon=True, name='whale-conversation').start()
         return True
+
+    def send(self, text, session_id='', cwd=None):
+        return self._start('/chat', {'text': text, 'sessionId': session_id, 'cwd': cwd})
+
+    def look(self, payload, session_id='', cwd=None):
+        return self._start('/look', {**payload, 'sessionId': session_id, 'cwd': cwd})
 
     def resume(self, pending):
         if not pending or self.busy:
             return
         self.busy = True
-        threading.Thread(target=self._run, args=('', '', None, pending), daemon=True, name='whale-chat').start()
+        threading.Thread(target=self._run, args=(None, None, pending), daemon=True, name='whale-resume').start()
 
-    def _run(self, text, session_id, cwd, pending):
+    def restore(self, session_id, pending=None):
+        if not session_id or self.busy:
+            return False
+        self.busy = True
+        def load():
+            try:
+                params = {'sessionId': session_id}
+                if pending:
+                    params['excludeRequestId'] = pending['requestId']
+                response = requests.get(self.endpoint + '/history', params=params, timeout=10)
+                data = response.json()
+                if not data.get('ok'):
+                    raise RuntimeError(data.get('error', '历史读取失败'))
+                event = ('history', data)
+            except Exception as error:
+                event = ('history_error', {'error': str(error)})
+            if pending:
+                self.publish(*event)
+                self._run(None, None, pending)
+            else:
+                self.busy = False
+                self.publish(*event)
+        threading.Thread(target=load, daemon=True, name='whale-history').start()
+        return True
+
+    def _run(self, path, payload, pending):
+        terminal = None
         try:
             if pending is None:
-                payload = {'text': text, 'sessionId': session_id}
-                if not session_id and cwd is not None:
-                    payload['cwd'] = cwd
-                response = requests.post(self.endpoint + '/chat', json=payload, timeout=30)
+                response = requests.post(self.endpoint + path, json=payload, timeout=30)
                 pending = response.json()
                 if not pending.get('ok'):
                     raise RuntimeError(pending.get('error', '发送失败'))
+                if path == '/look':
+                    pending['manual'] = bool(payload.get('manual'))
                 self.publish('accepted', pending)
             while not self.stop_event.is_set():
                 try:
@@ -44,15 +75,18 @@ class Conversation:
                     continue
                 if not state.get('ok'):
                     raise RuntimeError(state.get('error', '读取会话失败'))
-                self.publish('state', state)
                 if state['status'] in ('complete', 'failed'):
+                    terminal = ('state', state)
                     return
+                self.publish('state', state)
                 self.stop_event.wait(0.8)
         except Exception as error:
             if not self.stop_event.is_set():
-                self.publish('error', {'error': str(error)})
+                terminal = ('error', {'error': str(error)})
         finally:
             self.busy = False
+            if terminal is not None:
+                self.publish(*terminal)
 
     def stop(self):
         self.stop_event.set()

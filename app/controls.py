@@ -203,9 +203,16 @@ class Controls(NSObject):
         self._transcript.scrollRangeToVisible_((length, 0))
 
     @python_method
-    def _set_busy(self, busy, status):
+    def _restore_history(self, entries):
+        self._lines = [f"{item['name']}：{item['text']}" for item in entries]
+        self._transcript.setString_('\n\n'.join(self._lines[-12:]))
+        length = len(str(self._transcript.string()).encode('utf-16-le')) // 2
+        self._transcript.scrollRangeToVisible_((length, 0))
+
+    @python_method
+    def _set_busy(self, busy, status, allow_draft=False):
         self._send.setEnabled_(not busy)
-        self._input.setEnabled_(not busy)
+        self._input.setEnabled_(not busy or allow_draft)
         self._status.setStringValue_(status)
         self._status.setToolTip_(status)
 

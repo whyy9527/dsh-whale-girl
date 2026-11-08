@@ -1,7 +1,7 @@
 # 鲸鱼娘 · dsh-whale-girl
 
 住在 macOS 桌面上的 DeepSeek 同伴：陪你看屏幕、说话，也能接收文字，
-交给 DSH 会话处理任务。支持头像和全身两种形象，本地 Qwen TTS 发声。
+交给 DSH 会话处理任务。文字、看屏和攻略查询共用历史，自动压缩长上下文。支持头像和全身两种形象，本地 Qwen TTS 发声。
 
 [AI 安装、配置与维护入口：AGENTS.md](AGENTS.md)
 

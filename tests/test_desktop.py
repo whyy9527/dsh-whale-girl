@@ -41,17 +41,18 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(image.format, 'JPEG')
             self.assertEqual(image.size, (32, 32))
 
-    def test_silent_model_result_does_not_show_bubble_or_speak(self):
+    def test_screen_batch_enters_shared_conversation_without_a_second_http_client(self):
         overlay, voice = Overlay(), Voice()
         brain = Brain({}, overlay, voice)
+        delivered = []
+        brain.submit_screen = lambda payload, generation: delivered.append((payload, generation))
         frame = KeptFrame(Image.new('RGB', (32, 32), 'white'), 0, '12:00:00')
-        with patch('requests.post') as post, patch('main.AppHelper.callAfter') as deliver:
-            post.return_value.status_code = 200
-            post.return_value.json.return_value = {'ok': True, 'say': '', 'mood': 'idle'}
+        with patch('main.AppHelper.callAfter', side_effect=lambda callback, *args: callback(*args)):
             brain._send([frame], force=True)
-            deliver.assert_not_called()
-        self.assertEqual(voice.lines, [])
+        self.assertEqual(len(delivered), 1)
+        self.assertFalse(delivered[0][0]['grid'])
         self.assertEqual(overlay.comments, [])
+        self.assertEqual(voice.lines, [])
 
     def test_pause_discards_response_already_queued_for_main_thread(self):
         overlay, voice = Overlay(), Voice()
@@ -67,6 +68,17 @@ class DesktopTests(unittest.TestCase):
         brain.stop()
         brain._deliver_comment('late', 'happy', brain.pause_generation)
         self.assertEqual(voice.lines, ['new'])
+
+    def test_pause_blocks_automatic_reply_but_manual_look_can_still_reply(self):
+        overlay, voice = Overlay(), Voice()
+        brain = Brain({'watchEnabled': False}, overlay, voice)
+        brain._deliver_comment('automatic', 'idle', 0)
+        self.assertEqual(voice.lines, [])
+        brain._deliver_comment('manual', 'idle', 0, manual=True)
+        self.assertEqual(voice.lines, ['manual'])
+        brain.pause_generation += 1
+        brain._deliver_comment('stale manual', 'idle', 0, manual=True)
+        self.assertEqual(voice.lines, ['manual'])
 
     def test_pause_captures_nothing_until_resumed(self):
         brain = Brain({}, Overlay(), Voice(), demo=True)

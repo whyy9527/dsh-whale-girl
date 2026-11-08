@@ -9,7 +9,7 @@ copies of configuration defaults.
 
 - `lib/host.js`: DSH plugin, HTTP bridge and automatic overlay launch.
 - `lib/core.js`: screen-comment prompts and image payload contract.
-- `lib/chat.js`: explicit input through DSH Session Controller; request-to-turn projection.
+- `lib/chat.js`: shared DSH text/image session, request projection and automatic-turn tool policy.
 - `app/`: native Cocoa UI, screen sampling and local Qwen speech.
 - `app/config.py`: sole owner of settings defaults. User settings live under
   `$DSH_HOME/whale-girl/`, normally `~/.dsh/whale-girl/`.
@@ -38,9 +38,11 @@ Before editing runtime, assets or setup, read the relevant section of
   restore a full-screen fallback that sees the companion itself.
 - Keep comments gentle, brief and lightly playful. No sarcasm about the user’s
   effort, ability or idle time; silence is a valid model result.
-- Automatic screenshots use `ctx.llm` only. They must never wake a tool-enabled
-  Agent or be interpreted as permission to read/write files.
-- Explicit text goes to one DSH session. Match the durable user `source.rpcId`
+- Text, game queries and screen observations MUST use one persisted DSH session.
+  DSH owns shared history and compaction; never add a parallel memory store or
+  stateless `ctx.llm` screen path. Automatic observation turns hide tool schemas
+  and deny execution through the native tools guard; images do not grant permission.
+- Match the durable user `source.rpcId`
   to its enclosing turn; never display the latest arbitrary assistant message.
 - DSH owns tools, skills, history and approvals. Show approval waits and offer
   the DSH workbench; never auto-approve or change the session's permission policy.
@@ -68,7 +70,10 @@ npm test
 The smoke opens real Cocoa windows without screenshots/model calls. For UI work,
 inspect an actual native-window capture, not only the generated design. For DSH
 chat, run `.venv/bin/python tests/smoke_dsh.py` against the loaded plugin to verify
-a real controller round trip and tool use in its owned temporary workspace. Do not
+a real controller round trip and tool use in its owned temporary workspace. For
+shared-memory changes also run `.venv/bin/python tests/smoke_memory.py` (requires
+`zstd`): it proves text → image → text recall, file-tool restoration after the
+observation, and zero tool schemas/calls in the native observation turn. Do not
 claim support from fake-context tests alone. For capture changes, separately run
 `.venv/bin/python tests/smoke_capture.py` with Screen Recording permission; it opens
 two colored native windows and checks that sampled pixels exclude both.
