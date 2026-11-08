@@ -45,7 +45,7 @@ $DSH_HOME/whale-girl/expressions/
     idle.png  smug.png  shock.png  happy.png  bored.png  angry.png
   fullbody/
     idle.png
-    # Optional mood-specific images with the same six names
+    # Optional whole-body poses with the same six state names
 ```
 
 When upgrading a pre-mode local pack, move its root-level mood images into
@@ -57,7 +57,8 @@ for a full-body image. The menu opens the active mode's folder.
 
 Use true transparent RGBA art for popout/full-body display. Portrait crops tuck
 their lower cut edge into the disk; full-body mode preserves the complete image
-on a small glass pedestal. Opaque portrait images remain circular photographs;
+without a pedestal. Each state replaces the entire pose, including gestures and tail,
+and aligns the complete silhouette to a common bottom baseline. Opaque portrait images remain circular photographs;
 background removal is not performed at runtime. Files refresh while running;
 dragging defers image/layout updates until release. The cache key includes mode,
 source identity, nanosecond mtime, size and renderer version.
@@ -70,7 +71,7 @@ and CC BY-NC-SA conditions. Public screenshots and previews must use bundled art
 
 `design/surface-study.png` is the built-in image-generation study.
 Material: icy-blue frosted glass, near-white highlights, subtle blue edge,
-hairline slate-blue border, small soft shadow, dark slate text. The base, speech
+hairline slate-blue border, small soft shadow, dark slate text. The portrait base, speech
 bubble and control panel share the palette. Native drawing is implemented with Cocoa gradients. The exact creative input is
 [design/prompt.txt](../design/prompt.txt); the [current native controls](../design/implemented-controls.png)
 are an implementation capture, not the generated study.
@@ -81,6 +82,12 @@ item and avatar both open the same panel. Input is nonblocking; task execution
 continues in DSH if the desktop window exits. Approvals stay in the DSH UI.
 
 ## Permissions, sampling and process lifecycle
+
+Quartz excludes this process’s windows (character, bubble and controls)
+before sampling, so moving or opening the companion does not become model input.
+The application stays visible to other screen recorders. The system window list retains its front-to-back order; desktop windows remain
+included in the composed desktop image. There is no unfiltered
+screenshot fallback.
 
 macOS must grant Screen Recording to the program launching the overlay (for
 auto-start, check the program launching DSH). The sampler compares 64×36 gray

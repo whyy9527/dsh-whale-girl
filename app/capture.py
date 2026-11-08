@@ -1,23 +1,14 @@
-"""截屏：优先走 Quartz（不落盘、快），不行再退回 `screencapture` 命令行。
-
-macOS 从 10.15 起，谁截屏谁就得在「系统设置 → 隐私与安全性 → 屏幕录制」里被勾上；
-没勾的时候 Quartz 返回 None、screencapture 报 "could not create image from display"。
-两种情况都抛 ScreenCaptureDenied，让上层弹一句话引导用户去开权限。
-"""
+"""Quartz window composition; exclude the entire companion process before sampling."""
 
 from __future__ import annotations
 
+import os
 import subprocess
-import tempfile
-from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-try:  # pyobjc 没装的话，整个模块只保留 CLI 那条路
-    import Quartz  # type: ignore
-except Exception:  # pragma: no cover - 取决于机器
-    Quartz = None
+import Quartz
 
 
 class ScreenCaptureDenied(RuntimeError):
@@ -41,48 +32,17 @@ def _pil_from_cgimage(image) -> Image.Image:
     return Image.fromarray(np.ascontiguousarray(rgb), mode="RGB")
 
 
-def _grab_quartz() -> Image.Image:
-    rect = Quartz.CGRectInfinite
-    image = Quartz.CGWindowListCreateImage(
-        rect,
-        Quartz.kCGWindowListOptionOnScreenOnly,
-        Quartz.kCGNullWindowID,
-        Quartz.kCGWindowImageDefault,
-    )
-    if image is None:
-        raise ScreenCaptureDenied("Quartz 拿不到画面（多半是没开屏幕录制权限）")
-    return _pil_from_cgimage(image)
-
-
-def _grab_cli() -> Image.Image:
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
-        path = Path(handle.name)
-    try:
-        result = subprocess.run(
-            ["screencapture", "-x", "-t", "png", str(path)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0 or not path.exists():
-            raise ScreenCaptureDenied(
-                (result.stderr or "screencapture 失败").strip() or "屏幕录制权限没开"
-            )
-        return Image.open(path).convert("RGB")
-    finally:
-        path.unlink(missing_ok=True)
-
-
 def grab() -> Image.Image:
-    """截一张全屏（所有显示器拼起来的那张大图）。"""
-    if Quartz is not None:
-        try:
-            return _grab_quartz()
-        except ScreenCaptureDenied:
-            pass
-        except Exception:
-            pass
-    return _grab_cli()
+    """Compose on-screen windows in system order, excluding this process's windows."""
+    if not Quartz.CGPreflightScreenCaptureAccess():
+        raise ScreenCaptureDenied("屏幕录制权限未开启")
+    windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
+    window_ids = [int(window['kCGWindowNumber']) for window in windows
+                  if window['kCGWindowOwnerPID'] != os.getpid()]
+    image = Quartz.CGWindowListCreateImageFromArray(Quartz.CGRectInfinite, window_ids, Quartz.kCGWindowImageDefault)
+    if image is None:
+        raise ScreenCaptureDenied("Quartz 没有返回排除桌宠后的画面")
+    return _pil_from_cgimage(image)
 
 
 def permission_hint() -> str:

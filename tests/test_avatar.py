@@ -62,6 +62,7 @@ class AvatarTests(unittest.TestCase):
             self.assertIn((0, 0, 255, 255), colors)
             self.assertIn((255, 165, 0, 255), colors)
             self.assertNotIn((255, 0, 0, 255), colors)
+            self.assertEqual(image.getpixel((100, 990))[3], 0)  # no pedestal
 
 
 class CocoaDragTests(unittest.TestCase):

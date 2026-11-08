@@ -17,4 +17,4 @@ dsh web
 点击头像或菜单栏的「鲸」可输入文字、切换形象、控制陪看和声音。
 在面板中开启「登录时启动」，以后登录 macOS 时自动启动 DSH 与桌宠。
 
-代码 MIT；内置角色图按 [CC BY-NC-SA 4.0](THIRD-PARTY-NOTICES.md) 使用。
+本仓库采用 [CC BY-NC-SA 4.0](LICENSE)，第三方署名见 [许可说明](THIRD-PARTY-NOTICES.md)。

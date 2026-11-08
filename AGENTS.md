@@ -28,6 +28,8 @@ Before editing runtime, assets or setup, read the relevant section of
 
 ## Behavior boundaries
 
+- Capture excludes all windows of the overlay process before frame selection; never
+  restore a full-screen fallback that sees the companion itself.
 - Automatic screenshots use `ctx.llm` only. They must never wake a tool-enabled
   Agent or be interpreted as permission to read/write files.
 - Explicit text goes to one DSH session. Match the durable user `source.rpcId`
@@ -39,8 +41,8 @@ Before editing runtime, assets or setup, read the relevant section of
   coordinates; save position on release and defer layout changes during dragging.
 - Personal artwork, reference audio, model weights, user settings, credentials
   and logs stay outside tracked/public files. Never publish the private set in
-  screenshots, design studies or package assets. Built-in art has a separate
-  CC BY-NC-SA license; code is MIT.
+  screenshots, design studies or package assets. The repository uses CC BY-NC-SA
+  4.0; preserve third-party attribution.
 
 ## Checks and delivery
 
@@ -58,7 +60,10 @@ npm test
 The smoke opens real Cocoa windows without screenshots/model calls. For UI work,
 inspect an actual native-window capture, not only the generated design. For DSH
 chat, run `.venv/bin/python tests/smoke_dsh.py` against the loaded plugin to verify
-a real controller round trip and tool use in its owned temporary workspace. Do not claim support from fake-context tests alone.
+a real controller round trip and tool use in its owned temporary workspace. Do not
+claim support from fake-context tests alone. For capture changes, separately run
+`.venv/bin/python tests/smoke_capture.py` with Screen Recording permission; it opens
+two colored native windows and checks that sampled pixels exclude both.
 
 Before pushing, inspect exact staged files, `git diff --check`, package contents,
 and private-data boundaries; preserve unrelated changes. Development flags in

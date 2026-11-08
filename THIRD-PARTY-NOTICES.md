@@ -6,8 +6,8 @@ at commit `b9b61a35c3b2443ecdeab0ed442d6b33c603d343`.
 The original filenames are recorded in `assets/expressions/sources.json`.
 Runtime circular backing, contact shadows, mood rings and transparent character compositing are modifications rendered into a local cache.
 
-These images are **not covered by this project's MIT license**. The character
-artwork is reused under **CC BY-NC-SA 4.0**, retaining the upstream attribution
+The repository and character artwork use **CC BY-NC-SA 4.0**. The artwork
+retains its upstream attribution
 chain documented by [AIR-pixel's asset notice](https://github.com/AIR-pixel/deepseek-whale-maid-pet/blob/main/LICENSE-ASSETS):
 
 - Original character “溟月”: 上善无形, 2025.06. [Author](https://space.bilibili.com/4456176).
@@ -18,9 +18,7 @@ chain documented by [AIR-pixel's asset notice](https://github.com/AIR-pixel/deep
 
 [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 requires attribution, non-commercial use and sharing adaptations under the same
-license. Code may be reused under MIT; these bundled images require separate
-compliance with their asset license. Replace them with your own licensed art
-for uses outside that grant.
+license. Preserve the asset attribution chain alongside the project attribution.
 
 This is an unofficial fan project, with no affiliation with or endorsement by
 DeepSeek or the artists. Names and marks remain with their owners.

@@ -109,11 +109,6 @@ def render_fullbody(path):
     scale = min(size[0] * .94 / character.width, size[1] * .92 / character.height)
     character = character.resize((round(character.width * scale), round(character.height * scale)), Image.Resampling.LANCZOS)
     canvas = Image.new("RGBA", size)
-    base = (size[0] * .12, size[1] * .88, size[0] * .88, size[1] * .99)
-    mask = Image.new("L", size)
-    ImageDraw.Draw(mask).ellipse(base, fill=255)
-    canvas.paste(surface(size), (0, 0), mask)
-    ImageDraw.Draw(canvas).ellipse(base, outline=BORDER_RGBA, width=3)
     canvas.alpha_composite(character, ((size[0] - character.width) // 2, round(size[1] * .95 - character.height)))
     return canvas
 
@@ -139,7 +134,7 @@ def render_all(cache_dir: Path, expressions: Path | None = None, mode='portrait'
     for mood in MOODS:
         source = expression_source(folder, mood, mode)
         stat = source.stat()
-        identity = f'glass-v1:{mode}:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}'
+        identity = f'glass-v2:{mode}:{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}'
         stamp = hashlib.sha256(identity.encode()).hexdigest()[:20]
         target = cache_dir / f'expr-{mode}-{mood}-{stamp}.png'
         if not target.exists():

@@ -10,7 +10,9 @@ from AppKit import (
 from Foundation import NSObject
 from glass import GlassView
 
-WIDTH, HEIGHT = 350, 520
+WIDTH, HEIGHT = 328, 408
+INSET, ROW_HEIGHT, SETTINGS_Y = 16, 32, 218
+CONTENT_WIDTH = WIDTH - INSET * 2
 
 
 class ControlWindow(NSPanel):
@@ -44,18 +46,18 @@ class Controls(NSObject):
         self._window.setContentView_(view)
         self._view = view
 
-        self._label('鲸鱼娘', 20, 17, 270, 23, 16)
-        self._status = self._label('想说什么，直接告诉我。', 20, 43, 305, 18, 11)
-        self._button('看一眼', 234, 14, 68, 28, b'look:')
-        close = self._button('', 305, 14, 28, 28, b'close:')
+        self._label('鲸鱼娘', INSET, 13, 190, 23, 15)
+        self._status = self._label('想说什么，直接告诉我。', INSET, 39, CONTENT_WIDTH, 18, 11)
+        self._button('看一眼', 216, 11, 66, 28, b'look:')
+        close = self._button('', 286, 11, 26, 28, b'close:')
         close.setBordered_(False)
         close.setImage_(NSImage.imageWithSystemSymbolName_accessibilityDescription_('xmark', '关闭面板'))
 
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(20, 72, 310, 130))
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(INSET, 64, CONTENT_WIDTH, 90))
         scroll.setBorderType_(0)
         scroll.setDrawsBackground_(False)
         scroll.setHasVerticalScroller_(True)
-        self._transcript = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 295, 130))
+        self._transcript = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, CONTENT_WIDTH - 15, 90))
         self._transcript.setEditable_(False)
         self._transcript.setDrawsBackground_(False)
         self._transcript.setFont_(NSFont.systemFontOfSize_(12.5))
@@ -67,34 +69,36 @@ class Controls(NSObject):
         scroll.setDocumentView_(self._transcript)
         view.addSubview_(scroll)
 
-        self._input = NSTextField.alloc().initWithFrame_(NSMakeRect(20, 213, 248, 32))
+        self._input = NSTextField.alloc().initWithFrame_(NSMakeRect(INSET, 168, 234, 24))
         self._input.setStringValue_('')
         self._input.setPlaceholderString_('想说什么…')
         self._input.setFont_(NSFont.systemFontOfSize_(13))
+        self._input.setBezelStyle_(1)
+        self._input.setFocusRingType_(1)
         self._input.setTarget_(self)
         self._input.setAction_(b'send:')
         view.addSubview_(self._input)
-        self._send = self._button('发送', 276, 212, 56, 34, b'send:')
+        self._send = self._button('发送', 258, 165, 54, 30, b'send:')
         self._send.setBezelColor_(NSColor.systemBlueColor())
         self._send.setContentTintColor_(NSColor.whiteColor())
         self._send.setKeyEquivalent_('\r')
-        self._line(261)
+        self._line(204)
 
-        self._watch = self._switch('陪看', 278, b'watchChanged:')
-        self._voice = self._switch('声音', 320, b'voiceChanged:')
-        self._label('形象', 20, 364, 130, 23)
-        self._mode = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(166, 358, 165, 30))
+        self._watch = self._switch('陪看', SETTINGS_Y, b'watchChanged:')
+        self._voice = self._switch('声音', SETTINGS_Y + ROW_HEIGHT, b'voiceChanged:')
+        self._label('形象', INSET, SETTINGS_Y + ROW_HEIGHT * 2 + 1, 130, 23)
+        self._mode = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(168, SETTINGS_Y + ROW_HEIGHT * 2 - 3, 144, 28))
         self._mode.setSegmentCount_(2)
         self._mode.setLabel_forSegment_('头像', 0)
         self._mode.setLabel_forSegment_('全身', 1)
         self._mode.setTarget_(self)
         self._mode.setAction_(b'modeChanged:')
         view.addSubview_(self._mode)
-        self._autostart = self._switch('登录时启动', 402, b'autostartChanged:')
-        self._line(446)
-        self._button('打开素材', 16, 465, 94, 31, b'assets:')
-        self._button('DSH 工作台', 115, 465, 111, 31, b'workbench:')
-        self._button('退出', 268, 465, 66, 31, b'quit:')
+        self._autostart = self._switch('登录时启动', SETTINGS_Y + ROW_HEIGHT * 3, b'autostartChanged:')
+        self._line(350)
+        self._button('打开素材', 12, 366, 90, 28, b'assets:')
+        self._button('DSH 工作台', 104, 366, 110, 28, b'workbench:')
+        self._button('退出', 258, 366, 58, 28, b'quit:')
         return self
 
     @python_method
@@ -118,8 +122,8 @@ class Controls(NSObject):
 
     @python_method
     def _switch(self, title, y, selector):
-        self._label(title, 20, y + 1, 235, 23)
-        switch = NSSwitch.alloc().initWithFrame_(NSMakeRect(286, y - 4, 44, 28))
+        self._label(title, INSET, y + 1, 220, 23)
+        switch = NSSwitch.alloc().initWithFrame_(NSMakeRect(WIDTH - INSET - 44, y - 4, 44, 28))
         switch.setTarget_(self)
         switch.setAction_(selector)
         self._view.addSubview_(switch)
@@ -127,7 +131,7 @@ class Controls(NSObject):
 
     @python_method
     def _line(self, y):
-        line = NSTextField.alloc().initWithFrame_(NSMakeRect(20, y, 310, 1))
+        line = NSTextField.alloc().initWithFrame_(NSMakeRect(INSET, y, CONTENT_WIDTH, 1))
         line.setEditable_(False)
         line.setBezeled_(False)
         line.setDrawsBackground_(True)
