@@ -103,6 +103,24 @@ class CocoaDragTests(unittest.TestCase):
             pet._close_controls()
             pet._window.close()
 
+    def test_bubble_and_gap_do_not_hit_character_controls(self):
+        pet = ui.Overlay.alloc().initWithArt_(self.paths)
+        try:
+            for mode in ('portrait', 'fullbody'):
+                pet._configure(size=132, x=200, y=200, bubble_hide=12, always_on_top=True, mode=mode)
+                pet._show_comment('气泡周围不能触发角色菜单', 'idle')
+                root = pet._window.contentView()
+                avatar = pet._avatar.frame()
+                center_y = avatar.origin.y + avatar.size.height / 2
+                self.assertEqual(root.hitTest_(NSMakePoint(30, center_y)), pet._drag)
+                for x in (avatar.size.width + 5, avatar.size.width + ui.AVATAR_GAP + 40):
+                    self.assertNotEqual(root.hitTest_(NSMakePoint(x, center_y)), pet._drag)
+        finally:
+            if pet._hide_timer:
+                pet._hide_timer.invalidate()
+            pet._close_controls()
+            pet._window.close()
+
     def test_live_timer_loads_and_removes_local_override(self):
         from Foundation import NSDate, NSRunLoop
         from main import build_overlay

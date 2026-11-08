@@ -44,16 +44,15 @@ from AppKit import (
     NSStringDrawingUsesLineFragmentOrigin,
 )
 from Foundation import NSString, NSTimer, NSObject
-from theme import SURFACE_RGBA, BORDER_RGBA
 from glass import paint_glass
 from controls import Controls
 
 BUBBLE_PADDING = 14
 BUBBLE_RADIUS = 16
+BUBBLE_TAIL = 10
 AVATAR_GAP = 18  # 气泡小尖角伸出来的距离
 MAX_BUBBLE_WIDTH = 300
 FONT_SIZE = 13.5
-BUBBLE_FILL = tuple(value / 255 for value in SURFACE_RGBA)
 BUBBLE_TEXT = (0.14, 0.21, 0.31, 1.0)
 
 
@@ -119,33 +118,43 @@ class BubbleView(NSView):
         shadow.setShadowOffset_(NSMakeSize(0, -3))
         shadow.set()
 
-        paint_glass(bounds, BUBBLE_RADIUS)
-
+        # One closed contour gives the body and curved tail a continuous rim and fill.
+        left, right, bottom, top = BUBBLE_TAIL + 1, bounds.size.width - 1, 1, bounds.size.height - 1
+        radius, mid = min(BUBBLE_RADIUS, (top - bottom) / 2), bounds.size.height / 2
+        k = radius * .55228475
+        tail_half = min(7, (top - bottom) / 2 - radius - 1)
+        path = NSBezierPath.bezierPath()
+        path.moveToPoint_(NSMakePoint(left + radius, bottom))
+        path.lineToPoint_(NSMakePoint(right - radius, bottom))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(right, bottom + radius), NSMakePoint(right - radius + k, bottom), NSMakePoint(right, bottom + radius - k))
+        path.lineToPoint_(NSMakePoint(right, top - radius))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(right - radius, top), NSMakePoint(right, top - radius + k), NSMakePoint(right - radius + k, top))
+        path.lineToPoint_(NSMakePoint(left + radius, top))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(left, top - radius), NSMakePoint(left + radius - k, top), NSMakePoint(left, top - radius + k))
+        path.lineToPoint_(NSMakePoint(left, mid + tail_half))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(2, mid - 1), NSMakePoint(left, mid + 2), NSMakePoint(left - 5, mid))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(2, mid - 3), NSMakePoint(.5, mid - 1), NSMakePoint(.5, mid - 3))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(left, mid - tail_half), NSMakePoint(left - 3, mid - 3), NSMakePoint(left, mid - 5))
+        path.lineToPoint_(NSMakePoint(left, bottom + radius))
+        path.curveToPoint_controlPoint1_controlPoint2_(NSMakePoint(left + radius, bottom), NSMakePoint(left, bottom + radius - k), NSMakePoint(left + radius - k, bottom))
+        path.closePath()
+        paint_glass(bounds, outline=path)
         NSShadow.alloc().init().set()
-
-        # 左边指向头像的小尖角
-        tail = NSBezierPath.bezierPath()
-        tail.moveToPoint_(NSMakePoint(0.5, bounds.size.height / 2 + 8))
-        tail.lineToPoint_(NSMakePoint(-AVATAR_GAP, bounds.size.height / 2))
-        tail.lineToPoint_(NSMakePoint(0.5, bounds.size.height / 2 - 8))
-        tail.closePath()
-        _color(*BUBBLE_FILL).setFill()
-        tail.fill()
 
     @python_method
     def _layout_label(self, width: float, height: float) -> None:
         self._label.setFrame_(
             NSMakeRect(
+                BUBBLE_PADDING + BUBBLE_TAIL,
                 BUBBLE_PADDING,
-                BUBBLE_PADDING,
-                max(10.0, width - BUBBLE_PADDING * 2),
+                max(10.0, width - BUBBLE_PADDING * 2 - BUBBLE_TAIL),
                 max(10.0, height - BUBBLE_PADDING * 2),
             )
         )
 
 
 class DragView(NSView):
-    """铺满窗口的透明层：拖 = 移动窗口，单击/右键 = 弹菜单。"""
+    """Only the character is interactive: drag to move; click/right-click for controls."""
 
     def initWithOverlay_(self, overlay):
         self = objc.super(DragView, self).initWithFrame_(NSMakeRect(0, 0, 10, 10))
@@ -337,7 +346,7 @@ class Overlay(NSObject):
         )
         text_height = math.ceil(rect.size.height) + 2
         bubble_height = text_height + BUBBLE_PADDING * 2
-        bubble_width = min(MAX_BUBBLE_WIDTH, math.ceil(rect.size.width) + BUBBLE_PADDING * 2 + 6)
+        bubble_width = min(MAX_BUBBLE_WIDTH, math.ceil(rect.size.width) + BUBBLE_PADDING * 2 + 6) + BUBBLE_TAIL
         total_height = max(self._avatar_height, bubble_height)
         total_width = self._avatar_size + AVATAR_GAP + bubble_width
         return total_width, total_height, bubble_height
@@ -360,7 +369,7 @@ class Overlay(NSObject):
         self._bubble.setFrame_(NSMakeRect(self._avatar_size + AVATAR_GAP, bubble_y, bubble_width, bubble_height))
         self._bubble._layout_label(bubble_width, bubble_height)
 
-        self._drag.setFrame_(NSMakeRect(0, 0, total_width, total_height))
+        self._drag.setFrame_(self._avatar.frame())
 
     @python_method
     def _resize_to_avatar(self):

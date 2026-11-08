@@ -60,9 +60,9 @@ class Brain(threading.Thread):
         self.once = once
         self.attempt_done = threading.Event()
         self.picker = FramePicker(
-            threshold=float(cfg.get("diffThreshold", 0.035)),
+            threshold=float(cfg.get("diffThreshold", 0.06)),
+            min_changed_ratio=float(cfg.get("minChangedRatio", 0.18)),
             batch_size=int(cfg.get("batchSize", 9)),
-            max_batch_sec=float(cfg.get("maxBatchSec", 60)),
         )
         self.stop_event = threading.Event()
         self.force_look = threading.Event()
@@ -140,7 +140,8 @@ class Brain(threading.Thread):
         mode = str(self.cfg.get("sendMode", "grid"))
         if not batch:
             return {"frames": [], "spanSec": 0}
-        if mode == "frames":
+        use_grid = mode == "grid" and len(batch) == 9
+        if not use_grid:
             frames = [
                 {"data": base64.b64encode(frame_to_jpeg(item.image)).decode("ascii"), "ts": item.stamp}
                 for item in batch
@@ -151,7 +152,7 @@ class Brain(threading.Thread):
         span = 0.0
         if len(batch) >= 2:
             span = batch[-1].taken_at - batch[0].taken_at
-        return {"frames": frames, "spanSec": span, "grid": mode != "frames", "cellCount": len(batch)}
+        return {"frames": frames, "spanSec": span, "grid": use_grid, "cellCount": len(batch)}
 
     def _send(self, batch, force: bool = False) -> None:
         import requests
@@ -194,6 +195,8 @@ class Brain(threading.Thread):
         if self.stop_event.is_set() or self.chat_active or generation != self.pause_generation:
             return
         say = str(data.get("say", "")).strip()
+        if not say:
+            return
         mood = str(data.get("mood", "idle"))
         self.log(f"[say] {say}  ({mood}, {data.get('ms')}ms, {len(batch)} 帧)")
         AppHelper.callAfter(self._deliver_comment, say, mood, generation)

@@ -41,6 +41,18 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(image.format, 'JPEG')
             self.assertEqual(image.size, (32, 32))
 
+    def test_silent_model_result_does_not_show_bubble_or_speak(self):
+        overlay, voice = Overlay(), Voice()
+        brain = Brain({}, overlay, voice)
+        frame = KeptFrame(Image.new('RGB', (32, 32), 'white'), 0, '12:00:00')
+        with patch('requests.post') as post, patch('main.AppHelper.callAfter') as deliver:
+            post.return_value.status_code = 200
+            post.return_value.json.return_value = {'ok': True, 'say': '', 'mood': 'idle'}
+            brain._send([frame], force=True)
+            deliver.assert_not_called()
+        self.assertEqual(voice.lines, [])
+        self.assertEqual(overlay.comments, [])
+
     def test_pause_discards_response_already_queued_for_main_thread(self):
         overlay, voice = Overlay(), Voice()
         brain = Brain({}, overlay, voice)

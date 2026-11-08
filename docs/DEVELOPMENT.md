@@ -60,7 +60,8 @@ their lower cut edge into the disk; full-body mode preserves the complete image
 without a pedestal. Each state replaces the entire pose, including gestures and tail,
 and aligns the complete silhouette to a common bottom baseline. Opaque portrait images remain circular photographs;
 background removal is not performed at runtime. Files refresh while running;
-dragging defers image/layout updates until release. The cache key includes mode,
+dragging defers image/layout updates until release. Only the character frame owns
+click/drag actions; the speech bubble and the gap beside it do not open controls. The cache key includes mode,
 source identity, nanosecond mtime, size and renderer version.
 
 The current personal originals and derived artwork are not publicly licensed.
@@ -96,8 +97,12 @@ screenshot fallback.
 macOS must grant Screen Recording to the program launching the overlay (for
 auto-start, check the program launching DSH). The sampler compares 64×36 gray
 fingerprints against the last accepted frame; it batches changes into one image.
-A started batch can time out with one frame; an unchanged screen is not repeatedly
-sent. Model requests block sampling, and minimum-interval batches may be skipped.
+The first frame only establishes a baseline. Both mean grayscale difference and
+the changed-area threshold must pass before a frame is kept; compare against the
+last accepted frame so small accumulated changes can eventually count. Only a full
+batch is sent automatically: there is no timeout or forced comment on an idle
+screen. Manual look and partial diagnostic batches send actual images directly,
+never an almost-empty nine-cell grid. Model requests block sampling, and minimum-interval batches may be skipped.
 This is sampled screen understanding, not a video recording.
 
 Pause stops automatic capture and speech and discards stale replies. Explicit

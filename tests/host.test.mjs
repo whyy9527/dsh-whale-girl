@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 import { apply } from '../lib/host.js'
 
 /** 最小的 cordis 上下文替身：只实现插件用到的那几个口子。 */
-function fakeCtx(records) {
+function fakeCtx(records, reply = '{"say":"你盯着这行报错看了四分钟。","mood":"smug"}') {
   const effects = []
   const saved = []
   return {
@@ -30,8 +30,7 @@ function fakeCtx(records) {
         records.push(options)
         return (async function* () {
           yield { type: 'block-start', index: 0, blockType: 'text' }
-          yield { type: 'text-delta', index: 0, text: '{"say":"' }
-          yield { type: 'text-delta', index: 0, text: '你盯着这行报错看了四分钟。","mood":"smug"}' }
+          yield { type: 'text-delta', index: 0, text: reply }
           yield { type: 'usage', usage: { inputTokens: 1200, outputTokens: 30 } }
           yield { type: 'finish', reason: { kind: 'stop' } }
         })()
@@ -176,4 +175,22 @@ test('browser origins cannot submit tool-enabled user text', async () => {
     body: JSON.stringify({ text: 'write a file' }),
   })
   assert.equal(response.status, 403)
+})
+
+
+test('POST /look accepts deliberate silence as a successful result', async () => {
+  const previous = globalThis.__ctx.llm
+  globalThis.__ctx.llm = fakeCtx([], '{"say":"","mood":"idle"}').llm
+  try {
+    const response = await fetch(`${base}/look`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ frames: [{ data: PNG.toString('base64') }] }),
+    })
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.equal(body.ok, true)
+    assert.equal(body.say, '')
+  } finally {
+    globalThis.__ctx.llm = previous
+  }
 })

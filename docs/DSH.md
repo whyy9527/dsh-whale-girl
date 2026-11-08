@@ -53,3 +53,21 @@ a user-requested mutation.
 Fake-context tests verify correlation and routing. A real scratch-workspace
 round trip must separately prove host admission, tool activity and the expected
 file/result; never infer those from the existence of an exported service type.
+
+## Optional WoW Forever lookup
+
+The local web profile may load the official `@deepseek-ai/dsh-mcp-client` bridge
+with `serverName: wuxianwow`, `transport: streamable-http` and
+`url: https://wuxianwow.com/mcp`. The endpoint is documented by the third-party
+[无限图鉴 service](https://wuxianwow.com/ai). This is a database connection for the
+companion's explicit DSH conversations, not a game-client addon. The public
+package does not enable this remote service automatically.
+
+For 魔兽世界：无限 questions, use the `mcp__wuxianwow__*` query tools when present.
+Search by a name or keyword, then fetch the returned ID; tasks, NPCs and maps
+have specialized query tools. Preserve the source link and distinguish temporary
+third-party coordinates from client data. If the database has no location, say so;
+ask where the player is before inventing directions. Never infer the player's
+position or quest state from the existence of the connection. `report_issue` sends
+a public report and requires an explicit user request; gameplay queries are read-only.
+Automatic screenshots still do not invoke tool-enabled sessions.

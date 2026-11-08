@@ -76,6 +76,12 @@ test('parseModelOutput 空回复返回空串', () => {
   assert.deepEqual(parseModelOutput('', 30), { say: '', mood: 'idle' })
 })
 
+test('parseModelOutput preserves deliberate JSON silence', () => {
+  for (const raw of ['{"say":"","mood":"idle"}', '```json\n{"say":"  ","mood":"idle"}\n```']) {
+    assert.deepEqual(parseModelOutput(raw, 30), { say: '', mood: 'idle' })
+  }
+})
+
 test('clampText 按字符截断并削掉尾部标点', () => {
   assert.equal(clampText('  一二三四五六  ', 4), '一二三四')
   assert.equal(clampText('一二三四，', 4), '一二三四')

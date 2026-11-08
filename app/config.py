@@ -23,9 +23,9 @@ DEFAULTS = {
     "endpoint": "http://127.0.0.1:8791",
     # 采样与挑帧
     "sampleIntervalSec": 2.0,
-    "diffThreshold": 0.035,
+    "diffThreshold": 0.06,
+    "minChangedRatio": 0.18,
     "batchSize": 9,
-    "maxBatchSec": 60,
     "minSendIntervalSec": 20,
     "sendMode": "grid",  # grid = 拼成一张九宫格；frames = 九张原图分开发
     # 模型与参考音仅从仓库外固定路径读取。

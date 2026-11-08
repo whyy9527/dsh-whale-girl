@@ -1,11 +1,4 @@
-"""挑帧、拼九宫格。
-
-挑帧规则（就是这套东西的手感所在）：
-- 每 sampleIntervalSec 秒截一张，缩成 64x36 灰度当指纹；
-- 和"上一张被留下的帧"比，平均像素差超过 diffThreshold 才留下；
-- 攒满 batchSize（9）张就发；攒不满但超过 maxBatchSec 秒也发（至少 2 张），免得卡住一直不说话。
-- 发完之后，把最后一张的指纹留着当基准——下一批跟它比，不会重复挑同一画面。
-"""
+"""Keep substantial screen changes; send full batches only, without timed commentary."""
 
 from __future__ import annotations
 
@@ -120,39 +113,29 @@ def now_stamp() -> str:
 class FramePicker:
     """状态机：喂它一张图，它决定留不留；凑够了就吐出一批。"""
 
-    threshold: float = 0.035
+    threshold: float = 0.06
+    min_changed_ratio: float = 0.18
     batch_size: int = 9
-    max_batch_sec: float = 60.0
     kept: list[KeptFrame] = field(default_factory=list)
     baseline: np.ndarray | None = None
-    batch_started_at: float = 0.0
 
     def reset(self) -> None:
         self.kept.clear()
-        self.batch_started_at = 0.0
+        self.baseline = None
 
     def offer(self, image: Image.Image) -> list[KeptFrame] | None:
         """喂一帧。攒够了一批就返回它，否则返回 None。"""
         fp = fingerprint(image)
         if self.baseline is None:
-            changed = 1.0
-        else:
-            changed = difference(fp, self.baseline)
-
-        if changed >= self.threshold:
-            if not self.kept:
-                self.batch_started_at = time.monotonic()
-            self.kept.append(KeptFrame(image=image, taken_at=time.monotonic(), stamp=now_stamp()))
             self.baseline = fp
-        else:
-            # 画面没怎么变：如果这批已经开着头、又拖太久了，就别等了
-            if self.kept and time.monotonic() - self.batch_started_at > self.max_batch_sec:
-                return self._take()
             return None
-
+        changed = difference(fp, self.baseline)
+        changed_ratio = float(np.mean(np.abs(fp - self.baseline) >= 24))
+        if changed < self.threshold or changed_ratio < self.min_changed_ratio:
+            return None
+        self.kept.append(KeptFrame(image=image, taken_at=time.monotonic(), stamp=now_stamp()))
+        self.baseline = fp
         if len(self.kept) >= self.batch_size:
-            return self._take()
-        if len(self.kept) >= 2 and time.monotonic() - self.batch_started_at > self.max_batch_sec:
             return self._take()
         return None
 
@@ -161,7 +144,6 @@ class FramePicker:
             return None
         batch = list(self.kept)
         self.kept.clear()
-        self.batch_started_at = 0.0
         return batch
 
     @property

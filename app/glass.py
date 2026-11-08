@@ -7,9 +7,9 @@ def color(rgba):
     return NSColor.colorWithCalibratedRed_green_blue_alpha_(*(value / 255 for value in rgba))
 
 
-def paint_glass(bounds, radius=18, flipped=False, opaque=False):
+def paint_glass(bounds, radius=18, flipped=False, opaque=False, outline=None):
     rect = NSMakeRect(bounds.origin.x + 1, bounds.origin.y + 1, bounds.size.width - 2, bounds.size.height - 2)
-    path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, radius, radius)
+    path = outline if outline is not None else NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, radius, radius)
     bottom = (*SURFACE_BOTTOM[:3], 255) if opaque else SURFACE_BOTTOM
     top = (*SURFACE_TOP[:3], 255) if opaque else SURFACE_TOP
     gradient = NSGradient.alloc().initWithStartingColor_endingColor_(color(bottom), color(top))

@@ -15,3 +15,6 @@
 | [dsh-watch-together](https://github.com/SAOS-3624/dsh-watch-together) | 陪看画面与声音的职责拆分、迟到语音不堆积的体验参考 |
 | [dsh-live-narrator](https://github.com/yinque91/dsh-live-narrator) | 语音解说体验调研；帮助区分 agent 动作解说与本项目的屏幕视觉评论 |
 | [keleus/deepseek-pet](https://github.com/keleus/deepseek-pet) | 实际使用的六种同系列幼年鲸鱼娘图片，完整署名链见第三方许可 |
+
+可选游戏资料查询接入 [无限图鉴](https://wuxianwow.com/ai) 的 MCP 服务，
+用于《魔兽世界：无限》的任务、NPC 与地图查询；数据来源与临时标记随结果保留。

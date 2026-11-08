@@ -22,6 +22,12 @@ Before changing DSH integration, read [DSH contract](docs/DSH.md) and the instal
 0.2.1-rc.2 package's public types and implementation. Do not invent host APIs or
 replace DSH's tool engine with direct shell execution.
 
+For 魔兽世界：无限 questions, use the optional database tools described in
+[DSH contract](docs/DSH.md#optional-wow-forever-lookup) when available, cite results
+and do not invent missing coordinates. Keep navigation answers brief: the NPC,
+zone/coordinates, the next action and one source line; ask for the current zone
+when directions depend on it.
+
 Before editing runtime, assets or setup, read the relevant section of
 [development guide](docs/DEVELOPMENT.md). Sources and reuse boundaries are in
 [credits](docs/CREDITS.md) and [third-party notices](THIRD-PARTY-NOTICES.md).
@@ -30,6 +36,8 @@ Before editing runtime, assets or setup, read the relevant section of
 
 - Capture excludes all windows of the overlay process before frame selection; never
   restore a full-screen fallback that sees the companion itself.
+- Keep comments gentle, brief and lightly playful. No sarcasm about the user’s
+  effort, ability or idle time; silence is a valid model result.
 - Automatic screenshots use `ctx.llm` only. They must never wake a tool-enabled
   Agent or be interpreted as permission to read/write files.
 - Explicit text goes to one DSH session. Match the durable user `source.rpcId`
