@@ -65,6 +65,7 @@ def native():
                 lines = pet._controls._lines
                 replies = [s for s in lines if s.startswith('鲸鱼娘：')]
                 assert replies and '营地' in replies[-1] and '蓝鲸07' in replies[-1], replies
+                assert '"say"' not in replies[-1] and '"mood"' not in replies[-1], replies
                 assert any('我选“' + expected['choices'][expected['index']] + '”' in s for s in lines if s.startswith('你：')), lines
                 print('Native button → production /chat → contextual answer:', replies[-1], flush=True)
                 print('Question and answer both completed real Qwen/afplay playback.', flush=True)

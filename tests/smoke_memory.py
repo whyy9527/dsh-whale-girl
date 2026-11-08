@@ -83,6 +83,10 @@ def main():
             if event['type'] == 'turn/end': turns[data['turn']] = tool_names
         look_turn = requests_by_turn[look['requestId']]
         text_turn = requests_by_turn[third['requestId']]
+        systems = {event['data']['turn']: json.dumps(event['data']['message'], ensure_ascii=False)
+                   for event in events if event['type'] == 'system/message'}
+        assert '[鲸鱼娘当前自动陪伴规则]' in systems[look_turn], systems.keys()
+        assert '[鲸鱼娘当前自动陪伴规则]' not in systems[text_turn]
         assert turns[look_turn] <= GUIDE_TOOLS and set(calls.get(look_turn, [])) <= GUIDE_TOOLS, (turns, calls)
         assert len(turns[text_turn]) > len(GUIDE_TOOLS), turns
         print('Real text→image + game context→text memory, history reload and native tool isolation passed:', first['sessionId'])

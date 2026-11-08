@@ -85,12 +85,16 @@ test('automatic-turn policy survives durable compaction markers and restores tex
   const assemble = () => ({ sections: [], contexts: [], tools: [{ name: 'write' }], variables: {} })
   const screen = await listeners.get('system-prompt/assemble')(null, { scope: agent }, async () => assemble())
   assert.deepEqual(screen.tools, [])
+  assert.equal(screen.sections.at(-1).name, 'whale-girl.observation')
+  assert.match(screen.sections.at(-1).text, /赶路/)
+  assert.equal(screen.sections.at(-1).interpolate, false)
   assert.match(guard({ agent }), /明确文字请求/)
   events.push(event('turn/end', { turn: 1 }), event('turn/start', { turn: 2 }), event('user/message', { source: { rpcId: 'human' } }))
   listeners.get('agent/inbox/claimed')({ agent, turn: 2, message: { source: { rpcId: 'human' } } })
   assert.equal(isLookTurn(events), false)
   assert.equal(guard({ agent }), undefined)
   const text = await listeners.get('system-prompt/assemble')(null, { scope: agent }, async () => assemble())
+  assert.deepEqual(text.sections, [])
   assert.equal(text.tools[0].name, 'write')
 })
 
@@ -102,7 +106,7 @@ test('only fresh non-combat tasks get a durable guide identity', async () => {
     await submitLook(controller, {sessionId: 'one', instructions: 'JSON', images: [], game: snapshot})
   }
   assert.ok(requests[0].requestId.startsWith(GUIDE_PREFIX))
-  assert.match(requests[0].content[0].text, /无需再问/)
+  assert.doesNotMatch(requests[0].content[0].text, /无需再问/)
   assert.ok(requests.slice(1).every(r => r.requestId.startsWith(LOOK_PREFIX)))
   await submitLook(controller, {sessionId: 'one', images: [], instructions: '', game: null, gameView: {client: 'wow-forever', sampledAt: Date.now() / 1000}})
   assert.ok(requests.at(-1).requestId.startsWith(GUIDE_PREFIX))
@@ -121,8 +125,9 @@ test('guide schemas and native guard allow exactly three read-only tools, includ
   claim(GUIDE_PREFIX + 'one')
   const blocked = ['mcp__wuxianwow__report_issue', 'mcp__wuxianwow__quests_new', 'bash', 'write', 'web_fetch', 'subagent']
   const allTools = [...GUIDE_TOOLS, ...blocked].map(name => ({name, deferLoading: true}))
-  const assemble = () => listeners.get('system-prompt/assemble')(null, {scope: agent}, async () => ({tools: allTools}))
+  const assemble = () => listeners.get('system-prompt/assemble')(null, {scope: agent}, async () => ({sections: [], tools: allTools}))
   assert.deepEqual((await assemble()).tools.map(t => t.name), GUIDE_TOOLS)
+  assert.match((await assemble()).sections.at(-1).text, /无需再问/)
   assert.ok((await assemble()).tools.every(t => t.deferLoading === undefined))
   const preStep = () => listeners.get('agent/pre-step')({agent}, async () => ({kind: 'enter', messages: []}))
   assert.equal((await preStep()).startsRequestSeries, true)
@@ -146,4 +151,8 @@ test('shared transcript restores readable text and comments while retaining sile
   assert.deepEqual(projectHistory(events), [{ name: '你', text: 'my class is mage' }, { name: 'DSH', text: '记住了' }, { name: '看屏', text: '法师到了城门。' }])
   assert.equal(projectChat(events, LOOK_PREFIX + 'y').text, '')
   assert.equal(projectHistory(events, 42, LOOK_PREFIX + 'x').length, 2)
+  const historicalHeader = '[鲸鱼娘文字对话]\n旧版本的文字对话说明。\n\n我选先交任务'
+  assert.deepEqual(projectHistory([event('turn/start', {turn: 1}),
+    event('user/message', {source: {rpcId: 'human'}, content: [{type: 'text', text: historicalHeader}]}),
+    event('turn/end', {turn: 1})]), [{name: '你', text: '我选先交任务'}])
 })

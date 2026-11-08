@@ -36,9 +36,12 @@ provenance after validating the snapshot or foreground capture stamp. Guide
 availability is projected in `/health`; missing MCP tools do not masquerade as
 an available guide. Image-only lookups use readable task names/IDs and do not
 claim access to hidden game state.
-Their envelope marks
-the image as untrusted screen content and limits the short `say`/`mood` JSON rule
-to that observation turn. The following explicit text turn answers normally.
+The observation envelope carries images, frame descriptions, game state and
+event data. The current companion and short `say`/`mood` JSON policy belongs to
+the native `whale-girl.observation` system section for that observation turn;
+it is no longer copied into each user message. Historical observation rules
+do not override the current policy. The following explicit text turn has no
+companion section and answers normally.
 The source identity is durable `user/message.data.source.rpcId`, not text OCR,
 a marker guessed from the reply, or an in-memory latest-request variable.
 
@@ -50,7 +53,14 @@ allowlist owned by `lib/game.js`. A native monotonic `tools.guard` independently
 checks the full append-only current-turn source identities and rejects every
 other tool, including `report_issue`, shell, files, web fetch and subagents.
 Mixed input retains the more restrictive observation policy.
-The three guide schemas load immediately. When the offered name set changes,
+The same assembly seam adds the current observation system section while
+preserving the host's existing sections. It permits brief, grounded conversation
+during travel and continuation of shared topics without requiring a new quest
+or guide fact. Duplicate scenes with no new response may remain silent; no
+idle timer forces a comment, and the deterministic frame filter is unchanged.
+Verify its actual model input in native `system/message` events for the matching
+turn; `request/header` records model configuration and tools, not the prompt text.
+The three guide schemas load immediately. When the observation mode or offered name set changes,
 the public pre-step decision declares `startsRequestSeries: true`; DSH records a
 new native tool baseline while retaining the shared conversation. Incremental
 MCP additions alone are deferred and would otherwise leave an all-deferred
