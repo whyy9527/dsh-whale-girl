@@ -24,10 +24,10 @@ def show(path):
     from PyObjCTools import AppHelper
     from overlay import activate_app
     activate_app()
-    window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(NSMakeRect(500, 400, 256, 128), 0, NSBackingStoreBuffered, False)
+    window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(NSMakeRect(500, 400, 256, 32), 0, NSBackingStoreBuffered, False)
     window.setReleasedWhenClosed_(False)
     window.setLevel_(26)
-    view = NSImageView.alloc().initWithFrame_(NSMakeRect(0, 0, 256, 128))
+    view = NSImageView.alloc().initWithFrame_(NSMakeRect(0, 0, 256, 32))
     view.setImage_(NSImage.alloc().initWithContentsOfFile_(path))
     window.setContentView_(view)
     window.orderFrontRegardless()
@@ -40,7 +40,7 @@ def producer():
     lua = LuaRuntime(encoding=None)
     lua.execute((ROOT / 'addons/WhaleBridge/Protocol.lua').read_bytes())
     lua.execute(b'''
-        hidden = {}; combat = false; cells = {}
+        hidden = {}; combat = false; cells = {}; visible = {}
         function issecretvalue(v) return rawequal(v, hidden) end
         function issecrettable(v) return rawequal(v, hidden) end
         function time() return NOW end
@@ -68,7 +68,8 @@ def producer():
         function CreateFrame()
           return setmetatable({CreateTexture=function()
             local i = #cells + 1; cells[i] = {0,0,0}
-            return setmetatable({SetColorTexture=function(_,r,g,b) cells[i]={r*255,g*255,b*255} end}, {__index=function() return function() end end})
+            return setmetatable({SetColorTexture=function(_,r,g,b) cells[i]={r*255,g*255,b*255} end,
+              Show=function() visible[i]=true end, Hide=function() visible[i]=false end}, {__index=function() return function() end end})
           end}, {__index=function() return function() end end})
         end
         SlashCmdList = {}
@@ -78,14 +79,17 @@ def producer():
     lua.globals().TITLE = '找“人”\\线索'.encode()
     lua.globals().OBJECTIVE = '已找到 1/3 位居民'.encode()
     lua.execute((ROOT / 'addons/WhaleBridge/WhaleBridge.lua').read_bytes())
+    assert lua.globals().visible[1] is not True
+    lua.globals().SlashCmdList.WHALEBRIDGE(b'on')
     def image():
         colors = [[lua.globals().cells[i][c] for c in (1, 2, 3)] for i in range(1, 2049)]
-        return Image.fromarray(np.round(colors).astype(np.uint8).reshape(32, 64, 3)).resize((256, 128), Image.Resampling.NEAREST)
+        return Image.fromarray(np.round(colors).astype(np.uint8).reshape(16, 128, 3)).resize((256, 32), Image.Resampling.NEAREST)
     decoded = decode(image())
     assert decoded and decoded['target'] == {'id': 12345}, decoded
     assert decoded['selectedQuest']['title'] == '找“人”\\线索', decoded
     assert decoded['selectedQuest']['objectives'] == ['已找到 1/3 位居民'], decoded
     assert decoded['x'] == 42.1 and decoded['y'] == 65.2, decoded
+    assert lua.globals().visible[1] is True and lua.globals().visible[2048] is False
     lua.globals().combat = True
     lua.globals().tick()
     fighting = decode(image())

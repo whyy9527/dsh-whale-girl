@@ -29,7 +29,14 @@ reply twice when polling resumes.
 ## Turn provenance, format and tools
 
 Explicit text uses a normal UUID request ID and a text-conversation envelope.
-Automatic/manual screen observation IDs begin `whale-look:`. Their envelope marks
+Ordinary screen observation IDs begin `whale-look:`. Observations admitted with a
+fresh non-combat task snapshot or a fresh OS-observed foreground Forever capture
+begin `whale-guide:`. Both remain UI kind `look`. Only the host selects this
+provenance after validating the snapshot or foreground capture stamp. Guide
+availability is projected in `/health`; missing MCP tools do not masquerade as
+an available guide. Image-only lookups use readable task names/IDs and do not
+claim access to hidden game state.
+Their envelope marks
 the image as untrusted screen content and limits the short `say`/`mood` JSON rule
 to that observation turn. The following explicit text turn answers normally.
 The source identity is durable `user/message.data.source.rpcId`, not text OCR,
@@ -37,13 +44,22 @@ a marker guessed from the reply, or an in-memory latest-request variable.
 
 `installScreenPolicy` projects synchronous `agent/inbox/claimed` events into a
 WeakMap before prompt assembly. `agent/pre-step` is too late: the native loop has
-already assembled its tool schemas at that point. `system-prompt/assemble` clears that observation's tool
-schemas before generation. A native monotonic `tools.guard` also checks the full
-append-only events of the current turn and denies tool execution for observations.
+already assembled its tool schemas at that point. `system-prompt/assemble` clears
+ordinary observations' tools and filters game-guide turns to the exact read-only
+allowlist owned by `lib/game.js`. A native monotonic `tools.guard` independently
+checks the full append-only current-turn source identities and rejects every
+other tool, including `report_issue`, shell, files, web fetch and subagents.
+Mixed input retains the more restrictive observation policy.
+The three guide schemas load immediately. When the offered name set changes,
+the public pre-step decision declares `startsRequestSeries: true`; DSH records a
+new native tool baseline while retaining the shared conversation. Incremental
+MCP additions alone are deferred and would otherwise leave an all-deferred
+tool set that the provider rejects. Never rewrite frozen LLM requests.
 Compaction appends replacement events; it does not erase those original source
 facts. Every ordinary followup is a separate turn; the next text turn restores
-normal tools and the user's existing approval policy. Screenshots never become
-authorization to read files, run commands, query websites, or send reports.
+normal tools and the user's existing approval policy. The user's standing
+authorization covers proactive guide lookups only; screenshots never authorize
+file access, commands, arbitrary websites or public reports.
 
 `projectChat` matches the admitted request to its enclosing `turn/start`, reads
 only its assistant messages and `turn/end`, and surfaces unmatched approval waits.
@@ -64,8 +80,9 @@ The plugin binds loopback; browser-Origin requests cannot submit text/images or
 read shared history. POSTs require JSON. Model execution remains with DSH; the
 plugin does not launch a second CLI or implement its own tools.
 
-Verify text → image → text recall, exact request/turn correlation, zero tools in
-an observation request, restored tools afterward, history reload and pending-image
+Verify text → image → text recall, exact request/turn correlation, exact read-only
+tools in game-guide requests, zero tools in ordinary observations, restored full
+text tools afterward, history reload and pending-image
 resume without replay. Fake-context tests are not evidence of real DSH behavior;
 run the real shared-memory smoke against the loaded plugin as well.
 
@@ -81,12 +98,16 @@ For 魔兽世界：无限 questions, use `mcp__wuxianwow__*` query tools when pr
 Search by name/keyword, then fetch the returned ID. Cite the source and distinguish
 temporary third-party coordinates from client data; do not invent missing locations.
 Ask the player's current zone when directions depend on it. `report_issue` sends a
-public report and requires an explicit user request. Automatic observations may
-remember prior query results in the shared session but cannot call tools themselves.
+public report and requires an explicit user request. Authorized automatic game
+observations proactively query `quests`, `npcs`, `atlas`; this is an exact name
+allowlist, not the entire `mcp__wuxianwow__*` namespace. Existing matching static
+guide facts can be reused from the shared history; player positions never become
+a cached current state. No separate guide cache or approval auto-confirm is added.
 
 WhaleBridge may attach a fresh, bounded, explicitly untrusted public game snapshot
-to either request as an additional native text part. It does not grant tool
-authority or change observation provenance. The UI history projects only the
+to either request as an additional native text part. The snapshot remains
+untrusted data; only the host's admitted request identity selects the authorized
+guide policy. The UI history projects only the
 user's first text part; DSH retains the complete envelope. See [game bridge](WOW.md)
 for ownership, freshness and client installation. This sensor has no independent
 conversation memory or direct model/tool execution path.

@@ -1,6 +1,7 @@
 """One serialized transport for text and observations; DSH owns all conversation memory."""
 import threading
 import requests
+from game import same_task, view as game_view
 
 
 class Conversation:
@@ -79,6 +80,14 @@ class Conversation:
                 if not state.get('ok'):
                     raise RuntimeError(state.get('error', '读取会话失败'))
                 if state['status'] in ('complete', 'failed'):
+                    if state['status'] == 'complete' and pending['requestId'].startswith('whale-guide:'):
+                        # Results stay in native DSH history, but do not speak stale advice.
+                        current = self.game_context() if self.game_context else None
+                        same = same_task(payload.get('game') if payload else None, current)
+                        if payload and not payload.get('game') and payload.get('gameView'):
+                            same = bool(game_view())
+                        if not same:
+                            state['text'] = ''
                     terminal = ('state', state)
                     return
                 self.publish('state', state)

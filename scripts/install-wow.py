@@ -14,11 +14,13 @@ def main():
         parser.error('请指定含 World of Warcraft.app 和 Interface/AddOns 的 Forever 客户端目录')
     source = Path(__file__).resolve().parents[1] / 'addons' / 'WhaleBridge'
     target = addons / 'WhaleBridge'
+    updating = target.exists()
     target.mkdir(exist_ok=True)
     for name in ('WhaleBridge.toc', 'Protocol.lua', 'WhaleBridge.lua'):
         shutil.copy2(source / name, target / name)
     print('Installed:', target)
-    print('首次新增插件后请完全退出并重开游戏，在插件列表启用 Whale Bridge。/whale off 可隐藏并停用数据输出。')
+    print('已更新，在游戏里输入 /reload 应用。' if updating else '首次新增插件后请完全退出并重开游戏，在插件列表启用 Whale Bridge。')
+    print('默认不显示彩条。旧版运行中的彩条可输入 /whale off 立即关闭。')
 
 
 if __name__ == '__main__':

@@ -11,6 +11,8 @@ import time
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
+GUIDE_TOOLS = {'mcp__wuxianwow__quests', 'mcp__wuxianwow__npcs', 'mcp__wuxianwow__atlas'}
+
 
 def ask(endpoint, path, payload):
     response = requests.post(endpoint + path, json=payload, timeout=30)
@@ -59,20 +61,20 @@ def main():
         home = Path(os.environ.get('DSH_HOME', Path.home() / '.dsh'))
         journal = next((home / 'sessions').glob('*/' + first['sessionId'] + '/session.v4.jsonl.zstd'))
         events = [json.loads(line) for line in subprocess.check_output(['zstd', '-dc', str(journal)], text=True).splitlines()]
-        current_turn, tool_count = None, 0
+        current_turn, tool_names = None, set()
         turns, requests_by_turn, calls = {}, {}, {}
         for event in events:
             data = event.get('data', {})
             if event['type'] == 'turn/start': current_turn = data['turn']
             if event['type'] == 'user/message' and data.get('source', {}).get('rpcId'):
                 requests_by_turn[data['source']['rpcId']] = current_turn
-            if event['type'] == 'request/header': tool_count = len(data['header'].get('tools', []))
+            if event['type'] == 'request/header': tool_names = {t['name'] for t in data['header'].get('tools', [])}
             if event['type'] == 'tool/call': calls.setdefault(current_turn, []).append(data['name'])
-            if event['type'] == 'turn/end': turns[data['turn']] = tool_count
+            if event['type'] == 'turn/end': turns[data['turn']] = tool_names
         look_turn = requests_by_turn[look['requestId']]
         text_turn = requests_by_turn[third['requestId']]
-        assert turns[look_turn] == 0 and not calls.get(look_turn), (turns, calls)
-        assert turns[text_turn] > 0, turns
+        assert turns[look_turn] <= GUIDE_TOOLS and set(calls.get(look_turn, [])) <= GUIDE_TOOLS, (turns, calls)
+        assert len(turns[text_turn]) > len(GUIDE_TOOLS), turns
         print('Real text→image + game context→text memory, history reload and native tool isolation passed:', first['sessionId'])
 
         if args.restart_signal:

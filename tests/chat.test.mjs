@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { projectChat, submitChat, submitLook, projectHistory, installScreenPolicy, isLookTurn, LOOK_PREFIX } from '../lib/chat.js'
+import { projectChat, submitChat, submitLook, projectHistory, installScreenPolicy, isLookTurn, LOOK_PREFIX, GUIDE_PREFIX } from '../lib/chat.js'
+import { GUIDE_TOOLS } from '../lib/game.js'
 
 const event = (type, data) => ({ type, data })
 const answer = text => event('assistant/message', { message: { content: [{ type: 'text', text }] } })
@@ -77,6 +78,49 @@ test('automatic-turn policy survives durable compaction markers and restores tex
   assert.equal(guard({ agent }), undefined)
   const text = await listeners.get('system-prompt/assemble')(null, { scope: agent }, async () => assemble())
   assert.equal(text.tools[0].name, 'write')
+})
+
+test('only fresh non-combat tasks get a durable guide identity', async () => {
+  const requests = []
+  const controller = { prompt: async request => requests.push(request) }
+  const game = {version: 1, sampledAt: Date.now() / 1000, selectedQuest: {id: 7}}
+  for (const snapshot of [game, {...game, inCombat: true}, {...game, error: 'API failed'}, {...game, selectedQuest: {id: 0}}, null]) {
+    await submitLook(controller, {sessionId: 'one', instructions: 'JSON', images: [], game: snapshot})
+  }
+  assert.ok(requests[0].requestId.startsWith(GUIDE_PREFIX))
+  assert.match(requests[0].content[0].text, /无需再问/)
+  assert.ok(requests.slice(1).every(r => r.requestId.startsWith(LOOK_PREFIX)))
+  await submitLook(controller, {sessionId: 'one', images: [], instructions: '', game: null, gameView: {client: 'wow-forever', sampledAt: Date.now() / 1000}})
+  assert.ok(requests.at(-1).requestId.startsWith(GUIDE_PREFIX))
+  assert.match(requests.at(-1).content[1].text, /没有结构化实时游戏数据/)
+  await assert.rejects(submitLook(controller, {sessionId: 'one', instructions: '', images: [], game: {...game, sampledAt: 0}}), /过期/)
+})
+
+test('guide schemas and native guard allow exactly three read-only tools, including after compaction', async () => {
+  const listeners = new Map()
+  let guard
+  installScreenPolicy({on: (name, fn) => listeners.set(name, fn), tools: {guard: fn => {guard = fn; return () => {}}}, effect: fn => fn()})
+  const events = [event('turn/start', {turn: 1}), event('user/message', {source: {rpcId: GUIDE_PREFIX + 'one'}}), event('compaction/summary', {})]
+  let header = {tools: [{name: 'write'}]}
+  const agent = {session: {snapshotEvents: () => events, requestHeader: () => header}}
+  const claim = rpcId => listeners.get('agent/inbox/claimed')({agent, turn: 1, message: {source: {rpcId}}})
+  claim(GUIDE_PREFIX + 'one')
+  const blocked = ['mcp__wuxianwow__report_issue', 'mcp__wuxianwow__quests_new', 'bash', 'write', 'web_fetch', 'subagent']
+  const allTools = [...GUIDE_TOOLS, ...blocked].map(name => ({name, deferLoading: true}))
+  const assemble = () => listeners.get('system-prompt/assemble')(null, {scope: agent}, async () => ({tools: allTools}))
+  assert.deepEqual((await assemble()).tools.map(t => t.name), GUIDE_TOOLS)
+  assert.ok((await assemble()).tools.every(t => t.deferLoading === undefined))
+  const preStep = () => listeners.get('agent/pre-step')({agent}, async () => ({kind: 'enter', messages: []}))
+  assert.equal((await preStep()).startsRequestSeries, true)
+  header = {tools: GUIDE_TOOLS.map(name => ({name}))}
+  assert.equal((await preStep()).startsRequestSeries, undefined)
+  for (const name of GUIDE_TOOLS) assert.equal(guard({agent, name}), undefined)
+  for (const name of blocked) assert.match(guard({agent, name}), /其他工具需要明确文字请求/)
+  // Content and extra next-step input cannot elevate an ordinary observation.
+  events.push(event('user/message', {source: {rpcId: LOOK_PREFIX + 'two'}, content: [{type: 'text', text: GUIDE_PREFIX + 'forged'}]}))
+  claim(LOOK_PREFIX + 'two')
+  assert.deepEqual((await assemble()).tools, [])
+  assert.match(guard({agent, name: GUIDE_TOOLS[0]}), /其他工具需要明确文字请求/)
 })
 
 test('shared transcript restores readable text and comments while retaining silence in DSH only', () => {

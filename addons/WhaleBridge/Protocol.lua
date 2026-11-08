@@ -1,7 +1,7 @@
 -- Independent wire format. No network, disk IO, input simulation or secret values.
 WhaleWire = {}
 local W = WhaleWire
-W.columns, W.rows, W.cell = 64, 32, 4
+W.columns, W.rows, W.cell = 128, 16, 2
 W.marker = {5, 0, 5, 2, 5, 0, 3, 6}
 W.levels = {24, 93, 162, 231}
 W.maxBody = 1400

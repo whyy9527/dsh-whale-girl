@@ -8,7 +8,7 @@ function fakeCtx(records) {
   const sessions = new Map()
   return {
     effects, logger: { info() {}, warn() {} },
-    on() {}, tools: { guard() { return () => {} } },
+    on() {}, tools: { guard() { return () => {} }, schemas() { return [] } },
     effect(fn) { effects.push(fn()) },
     sessionController: {
       async create() { return { sessionId: 'shared-session' } },

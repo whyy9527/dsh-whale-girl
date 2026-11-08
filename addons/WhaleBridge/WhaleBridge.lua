@@ -1,10 +1,11 @@
 local W = WhaleWire
 local frame = CreateFrame('Frame', 'WhaleBridgeFrame', UIParent)
+frame:Hide()
 frame:SetSize(W.columns * W.cell, W.rows * W.cell)
-frame:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 8, -8)
+frame:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 0, 0)
 frame:SetFrameStrata('TOOLTIP')
 frame:EnableMouse(false)
-local textures, sequence, enabled = {}, 0, true
+local textures, sequence, enabled = {}, 0, false
 for i = 1, W.columns * W.rows do
     local texture = frame:CreateTexture(nil, 'OVERLAY')
     texture:SetSize(W.cell, W.cell)
@@ -99,8 +100,13 @@ local function update()
     if not packetOK then packet = W.packet({version = 1, sampledAt = time(), error = 'payload too large'}, sequence) end
     local colors = W.colors(packet)
     for i, texture in ipairs(textures) do
-        local color = colors[i] or {0, 0, 0}
-        texture:SetColorTexture(color[1] / 255, color[2] / 255, color[3] / 255, 1)
+        local color = colors[i]
+        if color then
+            texture:SetColorTexture(color[1] / 255, color[2] / 255, color[3] / 255, 1)
+            texture:Show()
+        else
+            texture:Hide()
+        end
     end
     frame:Show()
 end

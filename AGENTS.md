@@ -44,8 +44,15 @@ Before editing runtime, assets or setup, read the relevant section of
   narrate window changes or the nine-frame sequence. Never invent game routes.
 - Text, game queries and screen observations MUST use one persisted DSH session.
   DSH owns shared history and compaction; never add a parallel memory store or
-  stateless `ctx.llm` screen path. Automatic observation turns hide tool schemas
-  and deny execution through the native tools guard; images do not grant permission.
+  stateless `ctx.llm` screen path. Fresh non-combat task snapshots or foreground
+  Forever captures may use only
+  the three read-only guide tools declared in `lib/game.js`; other observations
+  have zero tools. Filter schemas and enforce the same boundary in the native
+  guard using durable request identity; screen/game text never grants permission.
+- Keep the game UI free of transport artifacts. WhaleBridge's visible pixel
+  transport is off by default and only enabled explicitly for diagnostics.
+  Normal proactive guidance uses the foreground game capture; never describe
+  image recognition as an invisible real-time game-data connection.
 - Match the durable user `source.rpcId`
   to its enclosing turn; never display the latest arbitrary assistant message.
 - DSH owns tools, skills, history and approvals. Show approval waits and offer
@@ -77,7 +84,9 @@ chat, run `.venv/bin/python tests/smoke_dsh.py` against the loaded plugin to ver
 a real controller round trip and tool use in its owned temporary workspace. For
 shared-memory changes also run `.venv/bin/python tests/smoke_memory.py` (requires
 `zstd`): it proves text → image → text recall, file-tool restoration after the
-observation, and zero tool schemas/calls in the native observation turn. Do not
+observation, and the exact read-only guide allowlist in a game observation. Run
+`.venv/bin/python tests/smoke_auto_guide.py` to prove proactive lookup without a
+typed question and zero tools when current game data is unavailable. Do not
 claim support from fake-context tests alone. For capture changes, separately run
 `.venv/bin/python tests/smoke_capture.py` with Screen Recording permission; it opens
 two colored native windows and checks that sampled pixels exclude both.

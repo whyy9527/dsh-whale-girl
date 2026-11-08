@@ -90,13 +90,13 @@ class DesktopTests(unittest.TestCase):
             brain.join()
             capture.assert_not_called()
 
-    def test_quest_events_trigger_one_real_frame_but_connection_movement_and_target_do_not(self):
+    def test_first_task_and_quest_events_trigger_one_frame_but_movement_and_target_do_not(self):
         brain = Brain({}, Overlay(), Voice())
         image = Image.new('RGB', (400, 200), 'white')
         base = {'version': 1, 'mapId': 37, 'x': 42, 'quests': [{'id': 7, 'complete': False}]}
-        with patch('main.grab', return_value=image), patch('main.game.decode') as decode:
+        with patch('main.grab', return_value=image), patch('main.game.decode') as decode, patch('main.game.view', return_value=None), patch.object(brain, '_guide_available', return_value=True):
             decode.return_value = base
-            self.assertIsNone(brain._next_batch())
+            self.assertEqual(len(brain._next_batch()), 1)
             decode.return_value = {**base, 'x': 43, 'target': {'id': 123}}
             self.assertIsNone(brain._next_batch())
             decode.return_value = {**base, 'quests': [{'id': 7, 'complete': True}]}
@@ -105,7 +105,7 @@ class DesktopTests(unittest.TestCase):
             decode.return_value = None
             self.assertIsNone(brain._next_batch())
             decode.return_value = base
-            self.assertIsNone(brain._next_batch())
+            self.assertEqual(len(brain._next_batch()), 1)
 
     def test_instance_lock_released_without_removing_inode(self):
         with tempfile.TemporaryDirectory() as directory:

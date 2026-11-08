@@ -108,7 +108,15 @@ This is sampled screen understanding, not a video recording.
 
 Pause stops automatic capture and speech and discards stale replies. Text and image admissions are serialized into the same DSH session; pending work
 suspends further sampling. The native session owns shared history and automatic
-compaction; automatic observations cannot execute tools. Speech has one consumer and replaces pending old text.
+compaction. Ordinary observations have zero tools; game-guide observations may
+use only the three read-only tools in `lib/game.js`. Before speaking a structured
+game-guide reply, the desktop reads the current panel again: changed task, zone,
+combat or missing data suppresses stale advice. Image-only help instead rechecks
+that Forever is still in the foreground; it cannot track hidden task/position
+changes during the query and must avoid live distance/direction claims.
+Pending guide replies restored after a
+restart lack that original comparison snapshot and stay silent; their results
+remain in DSH history. Speech has one consumer and replaces pending old text.
 Termination cleanup belongs to `applicationWillTerminate:` because AppKit can
 exit without returning from `runEventLoop`; the repeating Python timer lets
 SIGTERM be handled while Cocoa idles. Stop the worker before joining its thread.

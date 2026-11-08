@@ -13,9 +13,26 @@ import zlib
 import numpy as np
 from PIL import Image
 
-COLUMNS, ROWS, PREFIX_CELLS, MAX_BODY = 64, 32, 72, 1400
+COLUMNS, ROWS, PREFIX_CELLS, MAX_BODY = 128, 16, 72, 1400
 MARKER = np.array([(255, 0, 255), (0, 0, 0), (255, 0, 255), (0, 255, 0),
                    (255, 0, 255), (0, 0, 0), (0, 255, 255), (255, 255, 0)])
+
+
+def same_task(before: dict | None, after: dict | None) -> bool:
+    """Recheck the live task before speaking a potentially slow guide result.
+
+    Walking within the same map does not invalidate fixed NPC destinations.
+    Player distance/direction must not be presented as a real-time fact.
+    """
+    def signature(state):
+        if not state or state.get('inCombat') or state.get('error'):
+            return None
+        quest = state.get('selectedQuest') or {}
+        return (state.get('build'), state.get('mapId'), state.get('zone'), quest.get('id'),
+                quest.get('complete'), tuple(quest.get('objectives') or []),
+                tuple(sorted((q['id'], q.get('complete', False)) for q in state.get('quests', []))))
+    initial, current = signature(before), signature(after)
+    return initial is not None and initial == current
 
 
 def decode(image: Image.Image, now: float | None = None) -> dict | None:
@@ -34,10 +51,20 @@ def decode(image: Image.Image, now: float | None = None) -> dict | None:
             height += 1
         if not (2 <= width <= 16 and 2 <= height <= 16):
             continue
-        if x + COLUMNS * width > image.width or y + ROWS * height > image.height:
+        # WoW/macOS can rasterize 2 UI pixels as e.g. 3.75 display pixels.
+        # Marker columns 0, 2, 4 determine the pitch; rounding a single cell
+        # accumulates error across the entire strip.
+        row = magenta[y, x:min(image.width, x + width * 7)]
+        starts = np.flatnonzero(row & ~np.r_[False, row[:-1]])
+        if len(starts) < 3:
             continue
-        cols = x + np.arange(COLUMNS) * width + width // 2
-        rows = y + np.arange(ROWS) * height + height // 2
+        pitch = starts[2] / 4
+        if not 1.5 <= pitch <= 16 or abs(height - pitch) > 1:
+            continue
+        if x + COLUMNS * pitch > image.width + 1 or y + ROWS * pitch > image.height + 1:
+            continue
+        cols = np.floor(x + (np.arange(COLUMNS) + .5) * pitch).astype(int)
+        rows = np.floor(y + (np.arange(ROWS) + .5) * pitch).astype(int)
         cells = pixels[rows[:, None], cols].reshape(-1, 3).astype(np.int16)
         if np.max(np.abs(cells[:8] - MARKER)) > 110:
             continue
@@ -76,3 +103,12 @@ def current() -> dict | None:
         return decode(grab())
     except ScreenCaptureDenied:
         return None
+
+
+def view() -> dict | None:
+    """Foreground provenance for image-only game help, without a visible data bar."""
+    from AppKit import NSWorkspace
+    app = NSWorkspace.sharedWorkspace().frontmostApplication()
+    if app and app.bundleIdentifier() == 'com.blizzard.worldofwarcraft' and '/_forever_/' in str(app.bundleURL().path()):
+        return {'client': 'wow-forever', 'sampledAt': time.time()}
+    return None
